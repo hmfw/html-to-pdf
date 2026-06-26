@@ -1,0 +1,85 @@
+# CLAUDE.md
+
+本文件为 Claude Code（claude.ai/code）在本仓库工作时提供指引。请使用中文回复。
+
+## 项目概述
+
+`@hmfw/html-to-pdf` 是一个**框架无关**的 HTML 导出 PDF 的库，基于 [pdf-lib](https://github.com/Hopding/pdf-lib)（实际依赖 `@pdfme/pdf-lib`），默认支持中文（思源黑体）。
+
+**核心框架无关**：真正生成 PDF 的逻辑（`utils/*`、`types.ts`、`constants.ts`）不依赖任何框架。包只有**单一入口** `src/index.ts`，同时导出：
+
+- 框架无关：工具函数 `exportToPdf` / `downloadPdf`、类型、DOM 标记常量（`PDF_CONTAINER_ATTR` / `PDF_PAGE_ATTR`）。React / Vue2 / 原生直接用这部分。
+- Vue3 专属：`<PdfDocument>` / `<PdfPage>` 组件与插件 `install`（默认导出）。只用工具函数时这部分会被 tree-shake。
+
+`vue` 是**可选** peerDependency（`peerDependenciesMeta.vue.optional`），仅 Vue3 组件需要。构建产出 ESM（`dist/index.mjs`）和 CJS（`dist/index.cjs`）双格式，通过 `package.json` 的 `exports` 字段自动选择。多框架用法见 `docs/multi-framework.md`。
+
+核心特点：**不使用 html2canvas**。通过读取 DOM 的真实布局（`getBoundingClientRect` / `Range`）逐元素计算坐标，再用 pdf-lib 直接绘制文本、矩形和图片。因此导出的是矢量、可选中、可搜索的 PDF，而非位图截图。
+
+## 常用命令
+
+```bash
+npm install            # 安装依赖
+npm run dev            # 开发模式，启动示例 src/App.vue
+npm run build          # 构建库：vite build（ESM + CJS）+ vue-tsc 生成类型声明（用 tsconfig.build.json）
+npm run type-check     # 仅类型检查（vue-tsc --noEmit）
+```
+
+本项目**没有测试框架**。验证改动主要靠 `npm run type-check` 和 `npm run dev` 手动查看示例导出效果。
+
+## 架构
+
+数据流（一次导出）：
+
+```
+组件 → exportToPdf(element, options)  [utils/pdfGenerator.ts]
+  ├─ 扫描字符 + 生成字体子集            [utils/fontSubset.ts]
+  ├─ 嵌入字体、计算页面尺寸/边距/分页
+  └─ renderHTML(ctx, element)          [utils/pdfRenderer.ts]
+       └─ 递归遍历 DOM，按实际坐标绘制文本/盒子/图片
+```
+
+### 关键文件
+
+- `src/index.ts` — **唯一入口**。导出框架无关的工具函数/类型/常量，以及 Vue3 组件与插件 `install`。
+- `src/constants.ts` — DOM 标记约定常量 `PDF_CONTAINER_ATTR`（`'data-pdf'`）/ `PDF_PAGE_ATTR`（`'data-pdf-page'`），是 `data-pdf*` 属性名的唯一真相来源，渲染核心与组件都引用它。
+- `src/types.ts` — 公共类型：`PdfExportOptions`、`PdfGenerateResult`、`ExportStatus`。**这是 API 的唯一真相来源**。
+- `src/utils/pdfGenerator.ts` — 导出主流程 `exportToPdf` 和 `downloadPdf`。负责字体嵌入、页面创建（`computePages`）、坐标系初始化。
+- `src/utils/pdfRenderer.ts` — 渲染核心。递归遍历 DOM，`resolveBox` 做 px→pt 坐标换算（含 PDF 的 Y 轴翻转），`renderTextNode` 用 `Range` 精确定位文本，并处理字重、斜体（skew 模拟）、`<pre>` 换行。
+- `src/utils/fontSubset.ts` — 用 `opentype.js` 扫描元素字符、过滤 emoji、生成字体子集。
+- `src/utils/htmlParser.ts` — `pxToPt`（比例 0.75）和 `parseColor`（hex/短 hex/rgba）。
+- `src/utils/imageHelper.ts` — 图片加载、Canvas 转 PNG、格式检测。
+- `src/components/` — `PdfDocument`（包裹内容，通过 `defineExpose` 暴露 `exportPdf`/`status`/`error`/`reset` 供模板 ref 调用；不内置按钮，导出时机由使用方控制）、`PdfPage`（分页标记，`display: contents` 不影响布局）。
+
+### 坐标与渲染要点
+
+- 屏幕 96 DPI → PDF 72 DPI，换算比例 **0.75**（`pxToPt`）。
+- PDF 坐标原点在左下角，Y 轴向上，因此 `y = pageHeight - pxToPt(相对顶部 + 高度)`。
+- 文本宽度按 `rect.width * 1.5` 作为 `maxWidth`，给 pdf-lib 的宽度估算留余量，避免提前换行。
+- 渲染依赖元素**已完成布局**，导出前 DOM 必须可见且稳定（`display:none` / `visibility:hidden` 会跳过）。
+
+### 分页机制（PdfPage）
+
+- 通过 `data-pdf-page` 属性标记。`computePages` 为每个 `PdfPage` 计算 DOM 区域并创建对应 PDF 页。
+- `PdfPage` 可以不是 `PdfDocument`（带 `data-pdf`）的直接子元素，允许中间嵌套任意层级的包装元素。
+- **`PdfPage` 之间不能嵌套**（即一个 `data-pdf-page` 元素内部不能包含另一个 `data-pdf-page`）。
+- 无 `PdfPage` 时整个容器渲染为单页。
+
+## 字体
+
+- 运行时从 `public/fonts/` 加载，默认路径可通过 `options.fontPaths` 覆盖。
+- 默认路径定义在 `pdfGenerator.ts` 的 `DEFAULT_FONT_URLS`：
+  - `Source_Han_Sans_SC_Regular.otf`（必需）
+  - `Source_Han_Sans_SC_Bold.otf`（始终加载）
+- PDF 生成只用 Regular / Bold 两个字重；`src/styles/fonts.css` 里的其它字重仅供网页预览。
+- **字体子集化默认开启**，可通过 `options.fontSubset = false` 关闭（关闭时嵌入完整字体，文件显著增大）。emoji 等符号会被 `fontSubset.ts` 过滤掉。
+- 字体文件较大（每个约 16–17MB），已随仓库提交，克隆后即可使用。子集化后 PDF 文件仅包含实际使用的字符。
+- 用户可通过 `options.fontPaths = { regular, bold }` 自定义字体路径（本地路径或 CDN URL），详见 `docs/custom-fonts.md`。
+
+## 修改时的约定
+
+- **修改 API 时同步更新 `src/types.ts`、`README.md`、`docs/multi-framework.md` 和 `src/App.vue` 示例**，容易不一致（曾出现过 README 描述了代码中不存在的选项）。
+- **改导出时**：框架无关的能力与 Vue 组件都在 `src/index.ts` 一处导出；新增公共导出需同步更新 `package.json` 的 `exports`（目前只有 `.` 和 `./style.css`）。
+- `data-pdf-*` 属性名改动只改 `src/constants.ts` 一处，core 与组件都引用常量，勿再硬编码字符串。
+- 代码注释和文案使用中文，与现有风格保持一致。
+- 新增依赖须固定版本；`vue` 是**可选** peerDependency 且在构建中被 external。
+- 默认值集中在各自源文件：导出选项默认值在 `pdfGenerator.ts` 的 `normalizeMargin`/`getPageSize`，组件默认值在各 `.vue` 的 `withDefaults`。

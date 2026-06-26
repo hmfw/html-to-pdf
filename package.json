@@ -1,0 +1,51 @@
+{
+  "name": "@hmfw/html-to-pdf",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "框架无关的 HTML 转 PDF 库：读取真实 DOM 布局，用 pdf-lib 生成可选中的矢量 PDF，默认支持中文（思源黑体）。",
+  "main": "dist/index.cjs",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.cjs"
+    },
+    "./style.css": "./dist/style.css"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build && tsc -p tsconfig.build.json --declaration --emitDeclarationOnly",
+    "preview": "vite preview",
+    "type-check": "tsc --noEmit"
+  },
+  "keywords": [
+    "pdf",
+    "html-to-pdf",
+    "dom-to-pdf",
+    "pdf-lib",
+    "export-pdf",
+    "vector-pdf",
+    "framework-agnostic",
+    "chinese-font",
+    "source-han-sans"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@pdfme/pdf-lib": "^6.1.10",
+    "fontkit": "^2.0.2",
+    "opentype.js": "^2.0.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.0.4",
+    "typescript": "^5.4.5",
+    "vite": "^5.2.11",
+    "vue": "^3.4.27"
+  }
+}
