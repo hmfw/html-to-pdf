@@ -4,16 +4,16 @@
 
 通过解析 DOM 的真实布局（`getBoundingClientRect` / `Range`）直接绘制 PDF 内容，**不依赖 html2canvas**，因此导出的是可选中、可搜索的矢量文本，而非位图截图。
 
-> **核心是框架无关的。** 工具函数 `exportToPdf` / `downloadPdf` 只接收一个原生 DOM 元素，可在 React / Vue2 / 原生 JS 中直接使用。本包同时附带 Vue3 组件 `<PdfDocument>` / `<PdfPage>` 作为便捷封装。React / Vue2 / 原生用法详见 [多框架使用](#多框架使用)。
+> **框架无关。** 包只导出一个工具函数 `htmlToPdf`，它只接收一个原生 DOM 元素，可在 Vue / React / 原生 JS 中直接使用。React / Vue2 / 原生用法详见 [多框架使用](#多框架使用)。
 
 ## 特性
 
-- 框架无关：工具函数任意框架可用，另附 Vue3 组件封装
+- 框架无关：单个工具函数，任意框架可用，不牵入任何 UI 框架依赖
 - 使用 pdf-lib 直接生成矢量 PDF（文本可选中、可搜索）
 - 默认支持中文，内置思源黑体（Source Han Sans SC）
 - **自动字体子集化**：只嵌入页面实际用到的字形，文件通常约 500KB
 - 完整的 TypeScript 类型支持
-- 支持多页文档（`<PdfPage>` 或 `data-pdf-page` 手动分页）
+- 支持多页文档（`data-pdf-page` 手动分页）
 - 支持常见 HTML/CSS：标题、段落、列表、表格、图片、Canvas、引用、代码块、粗体、斜体、颜色、背景、边框、圆角
 - **实验性支持** `::before` / `::after` 伪元素（仅背景色和边框，需明确尺寸）
 
@@ -27,7 +27,7 @@ yarn add @hmfw/html-to-pdf
 pnpm add @hmfw/html-to-pdf
 ```
 
-> `vue` 是**可选** peer dependency：仅在使用 Vue3 组件（`<PdfDocument>` / `<PdfPage>`）时需要 `vue@^3.3.0`。只用工具函数（React / Vue2 / 原生）时无需安装 Vue。
+> 本库不依赖任何 UI 框架，在 Vue / React / 原生 JS 中用法相同。
 
 ## 字体配置
 
@@ -41,78 +41,75 @@ pnpm add @hmfw/html-to-pdf
 
 ## 快速开始
 
-### 方式 1: 使用组件（推荐）
+包只导出一个函数 `htmlToPdf(element, options)`。它读取元素当前的真实布局生成 PDF，**生成后自动触发浏览器下载**，并返回 `{ success, blob? }` 方便你进一步处理（上传、预览等）。
 
-`PdfDocument` 不内置按钮，通过模板 ref 调用 `exportPdf()` 触发导出，并读取暴露的 `status` / `error`。
+```ts
+import { htmlToPdf } from '@hmfw/html-to-pdf'
+
+const result = await htmlToPdf(element, { filename: 'document' })
+// 此时 PDF 已自动下载
+if (result.success && result.blob) {
+  // 如需自行处理，可使用 result.blob（上传、预览等）
+}
+```
+
+Vue3 中拿到容器元素的 ref 后调用即可：
 
 ```vue
 <template>
-  <PdfDocument ref="docRef" :options="{ filename: 'my-document' }">
-    <div>
-      <h1>标题</h1>
-      <p>这是一段中文内容</p>
-      <p>测试粗体：<strong>粗体文本</strong></p>
-    </div>
-  </PdfDocument>
-  <button @click="handleExport" :disabled="docRef?.status === 'processing'">
-    {{ docRef?.status === 'processing' ? '生成中...' : '导出 PDF' }}
+  <div ref="pdfContainer" data-pdf>
+    <h1>标题</h1>
+    <p>这是一段中文内容</p>
+    <p>测试粗体：<strong>粗体文本</strong></p>
+  </div>
+  <button @click="handleExport" :disabled="exporting">
+    {{ exporting ? '生成中...' : '导出 PDF' }}
   </button>
 </template>
 
 <script setup>
 import { ref } from 'vue'
-import { PdfDocument } from '@hmfw/html-to-pdf'
+import { htmlToPdf } from '@hmfw/html-to-pdf'
 
-const docRef = ref(null)
+const pdfContainer = ref(null)
+const exporting = ref(false)
 
 const handleExport = async () => {
-  await docRef.value.exportPdf()
+  exporting.value = true
+  try {
+    await htmlToPdf(pdfContainer.value, { filename: 'my-document' })
+  } finally {
+    exporting.value = false
+  }
 }
 </script>
 ```
 
-### 方式 2: 直接调用工具函数
-
-适合不依赖组件、需要拿到 Blob 自行处理（上传、预览等）的场景。各框架都从同一入口引入。
-
-```ts
-import { exportToPdf, downloadPdf } from '@hmfw/html-to-pdf'
-
-const result = await exportToPdf(element, { filename: 'document' })
-if (result.success && result.blob) {
-  downloadPdf(result.blob, 'document') // 或自行处理 result.blob
-}
-```
-
 ## 多框架使用
 
-核心导出能力（`exportToPdf` / `downloadPdf`）只接收一个原生 DOM 元素，不依赖任何框架。React / Vue2 / 原生 JS 直接从 `@hmfw/html-to-pdf` 引入这两个函数即可（不引入组件就不会牵入 Vue）。
+`htmlToPdf` 只接收一个原生 DOM 元素，不依赖任何框架。Vue / React / 原生 JS 都从同一入口引入这一个函数即可。
 
-分页同样框架无关：给导出根元素加 `data-pdf`，给每个分页块加 `data-pdf-page`（值从 1 递增），效果等同 `<PdfDocument>` / `<PdfPage>`。属性名也以常量形式导出（`PDF_CONTAINER_ATTR` / `PDF_PAGE_ATTR`）。
+分页同样框架无关：给导出根元素加 `data-pdf`，给每个分页块加 `data-pdf-page`。属性名也以常量形式导出（`PDF_CONTAINER_ATTR` / `PDF_PAGE_ATTR`）。
 
 完整示例见 [docs/multi-framework.md](docs/multi-framework.md)。最小用法：
 
 ```ts
-// React / Vue2 / 原生 JS 通用
-import { exportToPdf, downloadPdf } from '@hmfw/html-to-pdf'
+// Vue / React / 原生 JS 通用
+import { htmlToPdf } from '@hmfw/html-to-pdf'
 
 async function handleExport(el: HTMLElement) {
-  const result = await exportToPdf(el, { filename: 'document' })
-  if (result.success && result.blob) downloadPdf(result.blob, 'document')
+  await htmlToPdf(el, { filename: 'document' })
 }
 ```
 
 ```jsx
 // React 示例
 import { useRef } from 'react'
-import { exportToPdf, downloadPdf } from '@hmfw/html-to-pdf'
+import { htmlToPdf } from '@hmfw/html-to-pdf'
 
 function Report() {
   const ref = useRef(null)
-  const onExport = async () => {
-    const { success, blob } = await exportToPdf(ref.current, { filename: 'report' })
-    if (success && blob) downloadPdf(blob, 'report')
-  }
+  const onExport = () => htmlToPdf(ref.current, { filename: 'report' })
   return (
     <>
       <div ref={ref} data-pdf>
@@ -144,73 +141,24 @@ await htmlToPdf(element, { fontSubset: false })
 
 ## API
 
-### 组件
-
-#### `<PdfDocument>`
-
-包裹要导出的内容。组件不内置按钮，通过模板 ref 调用 `exportPdf()` 触发导出。
-
-| Prop | 类型 | 默认值 | 说明 |
-| --- | --- | --- | --- |
-| `options` | `PdfExportOptions` | `{}` | 导出选项，见下文 |
-| `width` | `number \| string` | `794` | 内容区宽度（数字按 px 处理） |
-
-事件：
-
-| 事件 | 参数 | 说明 |
-| --- | --- | --- |
-| `start` | — | 开始导出 |
-| `success` | `(blob: Blob)` | 导出成功 |
-| `error` | `(error: Error)` | 导出失败 |
-
-插槽：
-
-- 默认插槽：要导出的内容
-
-通过模板 ref 暴露（`expose`）：
-
-| 字段 | 类型 | 说明 |
-| --- | --- | --- |
-| `exportPdf` | `() => Promise<Blob>` | 程序化触发导出（生成并下载），返回 Blob |
-| `status` | `Ref<'idle' \| 'processing' \| 'success' \| 'error'>` | 当前导出状态 |
-| `error` | `Ref<Error \| null>` | 最近一次错误 |
-| `reset` | `() => void` | 重置状态 |
-| `contentRef` | `Ref<HTMLElement \| null>` | 内容容器元素 |
-
-#### `<PdfPage>`
-
-多页文档的分页标记，详见 [多页文档](#多页文档)。Prop：`pageNumber?: number`。
-
 ### 入口与导出
 
 包只有一个入口 `@hmfw/html-to-pdf`，导出内容：
 
-| 导出 | 说明 | 适用 |
-| --- | --- | --- |
-| `exportToPdf`、`downloadPdf` | 工具函数 | 任意框架 |
-| `PDF_CONTAINER_ATTR`、`PDF_PAGE_ATTR` | DOM 标记常量 | 任意框架 |
-| `PdfExportOptions`、`PdfGenerateResult`、`ExportStatus` | 类型 | 任意框架 |
-| `PdfDocument`、`PdfPage`、`install`（默认导出） | Vue3 组件与插件 | Vue3 |
-
-> 只引入工具函数 / 常量 / 类型时，不会牵入 Vue 依赖（Vue 组件被 tree-shake 掉）。
+| 导出 | 说明 |
+| --- | --- |
+| `htmlToPdf` | 唯一工具函数，框架无关 |
+| `PDF_CONTAINER_ATTR`、`PDF_PAGE_ATTR` | DOM 标记常量 |
+| `PdfExportOptions`、`PdfGenerateResult`、`ExportStatus` | TypeScript 类型 |
 
 ### 工具函数
 
-- `exportToPdf(element, options?): Promise<PdfGenerateResult>` — 生成 PDF，返回 `{ success, blob?, error? }`
-- `downloadPdf(blob, filename?)` — 触发浏览器下载
+- `htmlToPdf(element, options?): Promise<PdfGenerateResult>` — 读取元素真实布局生成 PDF，**自动触发浏览器下载**，并返回 `{ success, blob?, error? }`。
 
 ### DOM 标记常量（框架无关分页）
 
 - `PDF_CONTAINER_ATTR` = `'data-pdf'` — 标记导出根元素
-- `PDF_PAGE_ATTR` = `'data-pdf-page'` — 标记分页块（值从 1 递增）
-
-### 插件安装
-
-```ts
-import HtmlToPdf from '@hmfw/html-to-pdf'
-
-app.use(HtmlToPdf) // 全局注册 PdfDocument / PdfPage
-```
+- `PDF_PAGE_ATTR` = `'data-pdf-page'` — 标记分页块
 
 ## 配置选项
 
@@ -266,30 +214,30 @@ await htmlToPdf(element, {
 
 ## 多页文档
 
-使用 `<PdfPage>` 组件标记分页位置，每个 `<PdfPage>` 对应一个 PDF 页面：
+给导出根元素加 `data-pdf`，每个 `data-pdf-page` 标记一个 PDF 页面：
 
-```vue
-<PdfDocument>
-  <PdfPage :page-number="1">
+```html
+<div data-pdf>
+  <div data-pdf-page>
     <div>第一页内容</div>
-  </PdfPage>
+  </div>
 
-  <PdfPage :page-number="2">
+  <div data-pdf-page>
     <div>第二页内容</div>
-  </PdfPage>
+  </div>
 
-  <PdfPage :page-number="3">
+  <div data-pdf-page>
     <div>第三页内容</div>
-  </PdfPage>
-</PdfDocument>
+  </div>
+</div>
 ```
 
 **注意：**
 
-- `PdfPage` 可以不是 `PdfDocument` 的直接子元素，允许在中间嵌套任意包装元素
-- `PdfPage` 之间不可嵌套（一个 page 内部不能包含另一个 page）
-- 每个 `PdfPage` 内部可包含任意 HTML 结构
-- 不使用 `PdfPage` 时，整个容器导出为单页
+- `data-pdf-page` 可以不是 `data-pdf` 容器的直接子元素，允许在中间嵌套任意包装元素
+- `data-pdf-page` 之间不可嵌套（一个 page 内部不能包含另一个 page）
+- 每个 `data-pdf-page` 内部可包含任意 HTML 结构
+- 不使用 `data-pdf-page` 时，整个容器导出为单页
 
 ## 支持的 HTML / CSS
 
@@ -322,7 +270,7 @@ npm run build
 npm run type-check
 ```
 
-构建产物：`dist/index.mjs`（ESM）、`dist/index.d.ts`（类型）。仅提供 ESM 格式。
+构建产物：`dist/index.mjs`（ESM）、`dist/index.cjs`（CJS）、`dist/index.d.ts`（类型）。通过 `package.json` 的 `exports` 字段自动选择格式。
 
 ## 注意事项
 
@@ -330,7 +278,7 @@ npm run type-check
 2. **字体子集化**：默认启用以减小文件体积，可用 `fontSubset: false` 关闭
 3. **坐标渲染**：基于 DOM 实际布局绘制，元素需先完成渲染
 4. **样式覆盖**：支持基础样式，复杂效果（阴影、渐变等）不会被渲染
-5. **多页支持**：使用 `<PdfPage>` 标记实现精确分页控制
+5. **多页支持**：使用 `data-pdf-page` 标记实现精确分页控制
 
 ## License
 

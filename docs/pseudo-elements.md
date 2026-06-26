@@ -15,14 +15,12 @@
 
 ### 基础用法
 
-```vue
-<template>
-  <PdfDocument ref="pdfRef">
-    <div class="card">
-      这是一个带装饰条的卡片
-    </div>
-  </PdfDocument>
-</template>
+```html
+<div data-pdf>
+  <div class="card">
+    这是一个带装饰条的卡片
+  </div>
+</div>
 
 <style>
 .card {

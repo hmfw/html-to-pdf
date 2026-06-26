@@ -6,12 +6,13 @@
 
 `@hmfw/html-to-pdf` 是一个**框架无关**的 HTML 导出 PDF 的库，基于 [pdf-lib](https://github.com/Hopding/pdf-lib)（实际依赖 `@pdfme/pdf-lib`），默认支持中文（思源黑体）。
 
-**核心框架无关**：真正生成 PDF 的逻辑（`utils/*`、`types.ts`、`constants.ts`）不依赖任何框架。包只有**单一入口** `src/index.ts`，同时导出：
+**核心框架无关**：真正生成 PDF 的逻辑（`utils/*`、`types.ts`、`constants.ts`）不依赖任何框架。包只有**单一入口** `src/index.ts`，导出：
 
-- 框架无关：工具函数 `exportToPdf` / `downloadPdf`、类型、DOM 标记常量（`PDF_CONTAINER_ATTR` / `PDF_PAGE_ATTR`）。React / Vue2 / 原生直接用这部分。
-- Vue3 专属：`<PdfDocument>` / `<PdfPage>` 组件与插件 `install`（默认导出）。只用工具函数时这部分会被 tree-shake。
+- 工具函数 `htmlToPdf`（唯一 API）
+- DOM 标记常量 `PDF_CONTAINER_ATTR` / `PDF_PAGE_ATTR`
+- 类型 `PdfExportOptions` / `PdfGenerateResult` / `ExportStatus`
 
-`vue` 是**可选** peerDependency（`peerDependenciesMeta.vue.optional`），仅 Vue3 组件需要。构建产出 ESM（`dist/index.mjs`）和 CJS（`dist/index.cjs`）双格式，通过 `package.json` 的 `exports` 字段自动选择。多框架用法见 `docs/multi-framework.md`。
+Vue / React / 原生 JS 用法一致，都是拿到 DOM 元素后调用 `htmlToPdf`。`htmlToPdf` 生成 PDF 后**自动触发浏览器下载**，并返回 `{ success, blob?, error? }`。构建产出 ESM（`dist/index.mjs`）和 CJS（`dist/index.cjs`）双格式，通过 `package.json` 的 `exports` 字段自动选择。多框架用法见 `docs/multi-framework.md`。
 
 核心特点：**不使用 html2canvas**。通过读取 DOM 的真实布局（`getBoundingClientRect` / `Range`）逐元素计算坐标，再用 pdf-lib 直接绘制文本、矩形和图片。因此导出的是矢量、可选中、可搜索的 PDF，而非位图截图。
 
@@ -20,35 +21,38 @@
 ```bash
 npm install            # 安装依赖
 npm run dev            # 开发模式，启动示例 src/App.vue
-npm run build          # 构建库：vite build（ESM + CJS）+ vue-tsc 生成类型声明（用 tsconfig.build.json）
-npm run type-check     # 仅类型检查（vue-tsc --noEmit）
+npm run build          # 构建库：vite build（ESM + CJS）+ tsc 生成类型声明（用 tsconfig.build.json）
+npm run type-check     # 仅类型检查（tsc --noEmit）
+npm test               # 运行单元测试（vitest，jsdom 环境）
+npm run test:watch     # 监听模式
 ```
 
-本项目**没有测试框架**。验证改动主要靠 `npm run type-check` 和 `npm run dev` 手动查看示例导出效果。
+测试用 **Vitest**（jsdom 环境），覆盖 `src/utils/` 下框架无关的纯函数（`htmlParser` / `imageHelper` / `fontSubset`）。主流程 `htmlToPdf` 依赖真实布局、canvas 与字体 fetch，无法在 jsdom 有意义地测试，靠 `npm run dev` 手动查看示例导出效果验证。测试文件为 `src/**/*.test.ts`。
 
 ## 架构
 
 数据流（一次导出）：
 
 ```
-组件 → exportToPdf(element, options)  [utils/pdfGenerator.ts]
+调用方 → htmlToPdf(element, options)  [utils/pdfGenerator.ts]
   ├─ 扫描字符 + 生成字体子集            [utils/fontSubset.ts]
   ├─ 嵌入字体、计算页面尺寸/边距/分页
-  └─ renderHTML(ctx, element)          [utils/pdfRenderer.ts]
-       └─ 递归遍历 DOM，按实际坐标绘制文本/盒子/图片
+  ├─ renderHTML(ctx, element)          [utils/pdfRenderer.ts]
+  │    └─ 递归遍历 DOM，按实际坐标绘制文本/盒子/图片
+  └─ 生成 blob 并自动触发浏览器下载
 ```
 
 ### 关键文件
 
-- `src/index.ts` — **唯一入口**。导出框架无关的工具函数/类型/常量，以及 Vue3 组件与插件 `install`。
-- `src/constants.ts` — DOM 标记约定常量 `PDF_CONTAINER_ATTR`（`'data-pdf'`）/ `PDF_PAGE_ATTR`（`'data-pdf-page'`），是 `data-pdf*` 属性名的唯一真相来源，渲染核心与组件都引用它。
+- `src/index.ts` — **唯一入口**。导出框架无关的工具函数 `htmlToPdf`、DOM 标记常量与类型。
+- `src/constants.ts` — DOM 标记约定常量 `PDF_CONTAINER_ATTR`（`'data-pdf'`）/ `PDF_PAGE_ATTR`（`'data-pdf-page'`），是 `data-pdf*` 属性名的唯一真相来源，渲染核心引用它。
 - `src/types.ts` — 公共类型：`PdfExportOptions`、`PdfGenerateResult`、`ExportStatus`。**这是 API 的唯一真相来源**。
-- `src/utils/pdfGenerator.ts` — 导出主流程 `exportToPdf` 和 `downloadPdf`。负责字体嵌入、页面创建（`computePages`）、坐标系初始化。
+- `src/utils/pdfGenerator.ts` — 导出主流程 `htmlToPdf`。负责字体嵌入、页面创建（`computePages`）、坐标系初始化，最后自动触发浏览器下载。
 - `src/utils/pdfRenderer.ts` — 渲染核心。递归遍历 DOM，`resolveBox` 做 px→pt 坐标换算（含 PDF 的 Y 轴翻转），`renderTextNode` 用 `Range` 精确定位文本，并处理字重、斜体（skew 模拟）、`<pre>` 换行。
 - `src/utils/fontSubset.ts` — 用 `opentype.js` 扫描元素字符、过滤 emoji、生成字体子集。
 - `src/utils/htmlParser.ts` — `pxToPt`（比例 0.75）和 `parseColor`（hex/短 hex/rgba）。
 - `src/utils/imageHelper.ts` — 图片加载、Canvas 转 PNG、格式检测。
-- `src/components/` — `PdfDocument`（包裹内容，通过 `defineExpose` 暴露 `exportPdf`/`status`/`error`/`reset` 供模板 ref 调用；不内置按钮，导出时机由使用方控制）、`PdfPage`（分页标记，`display: contents` 不影响布局）。
+- `src/App.vue` — 开发示例（覆盖库支持的全部内容与样式特性），通过模板 ref 拿到容器后调用 `htmlToPdf`。仅供 `npm run dev` 预览，不打进库产物。
 
 ### 坐标与渲染要点
 
@@ -57,12 +61,12 @@ npm run type-check     # 仅类型检查（vue-tsc --noEmit）
 - 文本宽度按 `rect.width * 1.5` 作为 `maxWidth`，给 pdf-lib 的宽度估算留余量，避免提前换行。
 - 渲染依赖元素**已完成布局**，导出前 DOM 必须可见且稳定（`display:none` / `visibility:hidden` 会跳过）。
 
-### 分页机制（PdfPage）
+### 分页机制（data-pdf-page）
 
-- 通过 `data-pdf-page` 属性标记。`computePages` 为每个 `PdfPage` 计算 DOM 区域并创建对应 PDF 页。
-- `PdfPage` 可以不是 `PdfDocument`（带 `data-pdf`）的直接子元素，允许中间嵌套任意层级的包装元素。
-- **`PdfPage` 之间不能嵌套**（即一个 `data-pdf-page` 元素内部不能包含另一个 `data-pdf-page`）。
-- 无 `PdfPage` 时整个容器渲染为单页。
+- 通过 `data-pdf-page` 属性标记。`computePages` 为每个分页元素计算 DOM 区域并创建对应 PDF 页。
+- `data-pdf-page` 可以不是容器（带 `data-pdf`）的直接子元素，允许中间嵌套任意层级的包装元素。
+- **`data-pdf-page` 之间不能嵌套**（即一个 `data-pdf-page` 元素内部不能包含另一个 `data-pdf-page`）。
+- 无 `data-pdf-page` 时整个容器渲染为单页。
 
 ## 字体
 
@@ -77,9 +81,8 @@ npm run type-check     # 仅类型检查（vue-tsc --noEmit）
 
 ## 修改时的约定
 
-- **修改 API 时同步更新 `src/types.ts`、`README.md`、`docs/multi-framework.md` 和 `src/App.vue` 示例**，容易不一致（曾出现过 README 描述了代码中不存在的选项）。
-- **改导出时**：框架无关的能力与 Vue 组件都在 `src/index.ts` 一处导出；新增公共导出需同步更新 `package.json` 的 `exports`（目前只有 `.` 和 `./style.css`）。
-- `data-pdf-*` 属性名改动只改 `src/constants.ts` 一处，core 与组件都引用常量，勿再硬编码字符串。
+- **修改 API 时同步更新 `src/types.ts`、`README.md`、`API.md`、`docs/multi-framework.md` 和 `src/App.vue` 示例**，容易不一致（曾出现过文档描述了代码中不存在的组件/选项）。
+- **改导出时**：所有公共能力都在 `src/index.ts` 一处导出；新增公共导出需同步更新 `package.json` 的 `exports`（目前只有 `.` 和 `./style.css`）。
+- `data-pdf-*` 属性名改动只改 `src/constants.ts` 一处，core 引用常量，勿再硬编码字符串。
 - 代码注释和文案使用中文，与现有风格保持一致。
-- 新增依赖须固定版本；`vue` 是**可选** peerDependency 且在构建中被 external。
-- 默认值集中在各自源文件：导出选项默认值在 `pdfGenerator.ts` 的 `normalizeMargin`/`getPageSize`，组件默认值在各 `.vue` 的 `withDefaults`。
+- 默认值集中在源文件：导出选项默认值在 `pdfGenerator.ts` 的 `normalizeMargin`/`getPageSize`。

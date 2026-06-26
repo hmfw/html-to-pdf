@@ -111,7 +111,7 @@
           <canvas ref="demoCanvas" width="300" height="150" class="demo-canvas"></canvas>
 
           <h3>代码块</h3>
-          <pre><code>const result = await exportToPdf(element, {
+          <pre><code>const result = await htmlToPdf(element, {
   filename: 'document'
 });</code></pre>
         </div>
