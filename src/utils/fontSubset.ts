@@ -14,7 +14,9 @@ export function extractUsedCharacters(element: HTMLElement): Set<string> {
       if (!text.trim()) return
 
       for (const char of text) {
-        const code = char.charCodeAt(0)
+        // 用 codePointAt 而非 charCodeAt：emoji 多在星空平面（U+1F300+），
+        // charCodeAt(0) 只取高代理项（0xD83D 等），会漏判而无法过滤。
+        const code = char.codePointAt(0) ?? 0
 
         // 过滤 emoji 和不支持的符号
         // 保留中文字符（汉字、标点、符号等）
