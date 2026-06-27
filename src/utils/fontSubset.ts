@@ -18,16 +18,17 @@ export function extractUsedCharacters(element: HTMLElement): Set<string> {
         // charCodeAt(0) 只取高代理项（0xD83D 等），会漏判而无法过滤。
         const code = char.codePointAt(0) ?? 0
 
-        // 过滤 emoji 和不支持的符号
-        // 保留中文字符（汉字、标点、符号等）
-        const isEmoji = (code >= 0x1F300 && code <= 0x1F9FF) ||  // emoji 基本范围
-                        (code >= 0x1F600 && code <= 0x1F64F) ||  // emoticons
-                        (code >= 0x2600 && code <= 0x26FF) ||     // 其他符号
-                        (code >= 0x2700 && code <= 0x27BF)        // 装饰符号
+        // 过滤彩色 emoji（多在星空平面 U+1F000+，需彩色字体，PDF 嵌入会失败）。
+        // 保留 BMP 常见符号（★☎✓©®™ 等 U+2000–U+2FFF），中文字体通常支持。
+        const isColorEmoji =
+          (code >= 0x1F300 && code <= 0x1F9FF) || // Misc Symbols and Pictographs / Emoticons / etc.
+          (code >= 0x1F000 && code <= 0x1F02F) || // Mahjong/Domino Tiles
+          (code >= 0x1FA00 && code <= 0x1FAFF) || // Extended-A (chess, symbols)
+          (code >= 0xFE00 && code <= 0xFE0F) // Variation Selectors (emoji vs text presentation)
 
         // 保留所有字符，包括空格、中英文、标点等
-        // 只排除 emoji 和特殊符号
-        if (!isEmoji) {
+        // 只排除彩色 emoji
+        if (!isColorEmoji) {
           chars.add(char)
         }
       }
