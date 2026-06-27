@@ -18,6 +18,9 @@
     "README.md",
     "CHANGELOG.md"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "dev": "vite",
     "build": "npm run type-check && vite build && tsc -p tsconfig.build.json --declaration --emitDeclarationOnly",
