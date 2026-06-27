@@ -51,4 +51,16 @@ describe('extractUsedCharacters', () => {
   it('空元素返回空集合', () => {
     expect(extractUsedCharacters(makeEl('')).size).toBe(0)
   })
+
+  it('含有序列表时纳入数字与点（用于 "1." marker）', () => {
+    const chars = extractUsedCharacters(makeEl('<ol><li>甲</li><li>乙</li></ol>'))
+    expect(chars.has('1')).toBe(true)
+    expect(chars.has('.')).toBe(true)
+    expect(chars.has('甲')).toBe(true)
+  })
+
+  it('无列表时不额外注入数字', () => {
+    const chars = extractUsedCharacters(makeEl('<p>纯文本</p>'))
+    expect(chars.has('1')).toBe(false)
+  })
 })

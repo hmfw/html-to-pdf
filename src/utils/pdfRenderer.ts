@@ -228,6 +228,68 @@ function baselineFromTop(font: PDFFont, fontSize: number, lineBoxPt: number): nu
   return halfLeading + ascent
 }
 
+/** 单个可视行的测量结果：文本内容 + 该行在视口中的矩形 */
+type MeasuredLine = { text: string; left: number; top: number; width: number; height: number }
+
+/**
+ * 用 Range 逐字符测量，把一个文本节点切分为浏览器实际渲染的「可视行」。
+ * 依据每个字符的 client rect top 是否跳变来判断换行，从而完全复刻浏览器的换行点
+ * （含中英文混排、长单词、标点避头尾等），不再依赖 pdf-lib 的宽度估算换行。
+ */
+function measureVisualLines(textNode: Text): MeasuredLine[] {
+  const content = textNode.textContent ?? ''
+  const lines: MeasuredLine[] = []
+  const range = document.createRange()
+
+  let lineStart = 0
+  let prevTop: number | null = null
+  let prevRect: DOMRect | null = null
+
+  // 以「字符」为单位遍历（兼容代理对），按视口 top 跳变切行
+  const chars = Array.from(content)
+  let offset = 0
+  const offsets: number[] = []
+  for (const ch of chars) {
+    offsets.push(offset)
+    offset += ch.length
+  }
+  offsets.push(offset)
+
+  const flush = (startOff: number, endOff: number, rect: DOMRect) => {
+    const t = content.slice(startOff, endOff)
+    if (t.trim()) lines.push({ text: t, left: rect.left, top: rect.top, width: rect.width, height: rect.height })
+  }
+
+  for (let i = 0; i < chars.length; i++) {
+    range.setStart(textNode, offsets[i])
+    range.setEnd(textNode, offsets[i + 1])
+    const r = range.getBoundingClientRect()
+    // 空白字符可能返回零宽 rect，跳过其 top 判断但保留在行文本中
+    if (r.height === 0) {
+      prevRect = prevRect ?? r
+      continue
+    }
+    if (prevTop !== null && Math.abs(r.top - prevTop) > 1) {
+      // 换行：结算上一行（用上一行整体矩形）
+      range.setStart(textNode, offsets[lineStart])
+      range.setEnd(textNode, offsets[i])
+      flush(offsets[lineStart], offsets[i], range.getBoundingClientRect())
+      lineStart = i
+    }
+    prevTop = r.top
+    prevRect = r
+  }
+
+  // 结算最后一行
+  if (lineStart < chars.length) {
+    range.setStart(textNode, offsets[lineStart])
+    range.setEnd(textNode, offsets[chars.length])
+    flush(offsets[lineStart], offsets[chars.length], range.getBoundingClientRect())
+  }
+
+  return lines
+}
+
 /**
  * 渲染文本节点（基于 Range 精确定位）
  */
@@ -293,29 +355,61 @@ function renderTextNode(ctx: RenderContext, textNode: Text, parentElement: HTMLE
       }
     })
   } else {
-    // 单行文本或非 <pre> 标签内的普通文本
-    const x = pxToPt(rect.left - ctx.containerRect.left)
-    // 行盒高度取 range 实测高度，基线据此在行盒内居中定位
-    const y = ctx.pageHeight - pxToPt(rect.top - pageRect.top) - baselineFromTop(font, fontSize, pxToPt(rect.height))
-    // ×1.5 留出余量，避免 pdf-lib 因宽度估算偏差提前换行
-    const maxWidth = pxToPt(rect.width) * 1.5
+    // 普通文本：用 Range 逐行测量，复刻浏览器换行点后逐行绘制，
+    // 不再交给 pdf-lib 自动换行（其宽度估算会导致中英文混排时换行点偏差、右侧溢出）。
+    const lines = measureVisualLines(textNode)
+    const lineHeight = resolveLineHeight(styles, fontSize)
 
-    try {
-      // console.log(text, x, y, fontSize, font)
-      drawStyledText(page, text, {
-        x,
-        y,
-        size: fontSize,
-        font,
-        color: rgb(color.r, color.g, color.b),
-        italic,
-        maxWidth,
-        lineHeight: resolveLineHeight(styles, fontSize),
-      })
-    } catch (error) {
-      console.warn('Failed to draw text:', text, error)
+    for (const line of lines) {
+      const x = pxToPt(line.left - ctx.containerRect.left)
+      // 每行用自身实测行盒高度定位基线，首行不再被整段高度顶到中部
+      const baselineY =
+        ctx.pageHeight - pxToPt(line.top - pageRect.top) - baselineFromTop(font, fontSize, pxToPt(line.height))
+      try {
+        drawStyledText(page, line.text, {
+          x,
+          y: baselineY,
+          size: fontSize,
+          font,
+          color: rgb(color.r, color.g, color.b),
+          italic,
+          lineHeight,
+        })
+        // 文字装饰线（下划线 / 删除线 / 上划线），按行宽绘制
+        drawTextDecoration(page, styles, {
+          x,
+          baselineY,
+          width: pxToPt(line.width),
+          fontSize,
+          color: rgb(color.r, color.g, color.b),
+        })
+      } catch (error) {
+        console.warn('Failed to draw text:', line.text, error)
+      }
     }
   }
+}
+
+/**
+ * 绘制 text-decoration-line（underline / line-through / overline）。
+ * 用细矩形模拟，线宽随字号缩放，颜色取文字颜色。
+ * 不支持装饰线颜色/样式（dashed/wavy 等），统一画实线。
+ */
+function drawTextDecoration(
+  page: PDFPage,
+  styles: CSSStyleDeclaration,
+  opts: { x: number; baselineY: number; width: number; fontSize: number; color: ReturnType<typeof rgb> },
+): void {
+  const line = styles.textDecorationLine || styles.textDecoration || 'none'
+  if (!line || line === 'none') return
+
+  const { x, baselineY, width, fontSize, color } = opts
+  const thickness = Math.max(pxToPt(1), fontSize * 0.06)
+  const draw = (y: number) => page.drawRectangle({ x, y, width, height: thickness, color })
+
+  if (line.includes('underline')) draw(baselineY - fontSize * 0.12)
+  if (line.includes('line-through')) draw(baselineY + fontSize * 0.28)
+  if (line.includes('overline')) draw(baselineY + fontSize * 0.78)
 }
 /**
  * 检测并绘制伪元素（::before / ::after）的背景和边框
@@ -454,9 +548,24 @@ function drawPseudoElement(ctx: RenderContext, element: HTMLElement, pseudoType:
 }
 
 /**
- * 渲染上下文入口：递归渲染容器内所有元素
+ * 渲染上下文入口：分两遍渲染容器内所有元素。
+ *
+ * 单遍 DFS 会把「背景/边框」与「文字」交错绘制，导致后绘制的兄弟元素背景
+ * 覆盖先绘制的文字（典型：表格 rowspan 单元格的文字被下一行的条纹背景遮挡）。
+ * 改为两遍，匹配 CSS 绘制顺序：
+ *   第一遍 drawBoxLayer —— 所有元素的背景、边框、图片/canvas、伪元素
+ *   第二遍 drawTextLayer —— 所有文字与列表 marker
+ * 这样任何块级背景都不可能再盖住文字。
  */
 export async function renderHTML(ctx: RenderContext, element: HTMLElement): Promise<void> {
+  await drawBoxLayer(ctx, element)
+  drawTextLayer(ctx, element)
+}
+
+/**
+ * 第一遍：递归绘制盒子装饰层（背景 → 边框 → ::before → 子元素 → ::after），不绘制文字。
+ */
+async function drawBoxLayer(ctx: RenderContext, element: HTMLElement): Promise<void> {
   const styles = window.getComputedStyle(element)
   if (styles.display === 'none' || styles.visibility === 'hidden') return
 
@@ -495,17 +604,189 @@ export async function renderHTML(ctx: RenderContext, element: HTMLElement): Prom
     return
   }
 
+  // 表格：按 CSS 表格绘制层级（行组 → 行 → 单元格）重排背景绘制，
+  // 否则后出现的行背景会盖住前面 rowspan 单元格跨出的部分。
+  if (tagName === 'table') {
+    await drawTableBoxLayer(ctx, element)
+    if (box) drawPseudoElement(ctx, element, '::after')
+    return
+  }
+
   for (const child of Array.from(element.childNodes)) {
-    if (child.nodeType === Node.TEXT_NODE) {
-      renderTextNode(ctx, child as Text, element)
-    } else if (child.nodeType === Node.ELEMENT_NODE) {
-      await renderHTML(ctx, child as HTMLElement)
+    if (child.nodeType === Node.ELEMENT_NODE) {
+      await drawBoxLayer(ctx, child as HTMLElement)
     }
   }
 
   // 绘制 ::after 伪元素（在所有子元素之后）
   if (box) {
     drawPseudoElement(ctx, element, '::after')
+  }
+}
+
+/**
+ * 表格盒子层：按 CSS 规范的表格绘制层级绘制背景与边框，确保单元格背景永远在行背景之上。
+ * 层级（由底到顶）：行组(thead/tbody/tfoot) → 行(tr) → 单元格(td/th)。
+ * 单元格通过 drawBoxLayer 递归，以支持其内部嵌套内容（图片、嵌套表格等）。
+ */
+async function drawTableBoxLayer(ctx: RenderContext, table: HTMLElement): Promise<void> {
+  // 仅处理直属本表格的元素，排除嵌套表格内的行/单元格（它们由该嵌套表格自行绘制）
+  const ownedBy = (el: Element) => el.closest('table') === table
+
+  // 1. 行组背景（thead/tbody/tfoot）
+  const groups = (Array.from(table.querySelectorAll('thead, tbody, tfoot')) as HTMLElement[]).filter(
+    (g) => g.closest('table') === table,
+  )
+  for (const group of groups) {
+    const gbox = resolveBox(ctx, group)
+    if (gbox) {
+      drawElementFill(group, gbox)
+      drawElementBorders(group, gbox)
+    }
+  }
+
+  // 2. 行背景（tr）
+  const rows = (Array.from(table.querySelectorAll('tr')) as HTMLElement[]).filter(ownedBy)
+  for (const row of rows) {
+    const rbox = resolveBox(ctx, row)
+    if (rbox) {
+      drawElementFill(row, rbox)
+      drawElementBorders(row, rbox)
+    }
+  }
+
+  // 3. 单元格（td/th）：递归绘制，单元格背景覆盖在行背景之上。
+  //    递归会处理单元格内的嵌套内容（含嵌套表格）。
+  const cells = (Array.from(table.querySelectorAll('td, th')) as HTMLElement[]).filter(ownedBy)
+  for (const cell of cells) {
+    await drawBoxLayer(ctx, cell)
+  }
+}
+
+/**
+ * 第二遍：递归绘制文字层（文本节点 + 列表 marker），不再绘制任何背景。
+ */
+function drawTextLayer(ctx: RenderContext, element: HTMLElement): void {
+  const styles = window.getComputedStyle(element)
+  if (styles.display === 'none' || styles.visibility === 'hidden') return
+
+  const tagName = element.tagName.toLowerCase()
+  // 图片/canvas 无文字内容，跳过
+  if (tagName === 'img' || tagName === 'canvas') return
+
+  // 列表项：在文字之前绘制 marker（•、1. 等）
+  if (tagName === 'li') {
+    drawListMarker(ctx, element)
+  }
+
+  for (const child of Array.from(element.childNodes)) {
+    if (child.nodeType === Node.TEXT_NODE) {
+      renderTextNode(ctx, child as Text, element)
+    } else if (child.nodeType === Node.ELEMENT_NODE) {
+      drawTextLayer(ctx, child as HTMLElement)
+    }
+  }
+}
+
+/**
+ * 计算 <li> 在同级列表项中的序号（从 1 开始），忽略非 li 兄弟节点。
+ */
+function listItemOrdinal(li: HTMLElement): number {
+  let ordinal = 0
+  let sibling: Element | null = li.parentElement?.firstElementChild ?? null
+  while (sibling) {
+    if (sibling.tagName === 'LI') {
+      ordinal++
+      if (sibling === li) return ordinal
+    }
+    sibling = sibling.nextElementSibling
+  }
+  return ordinal || 1
+}
+
+/**
+ * 绘制列表项 marker（• / ◦ / ▪ / 1. 等）。
+ * 定位策略（精确版）：用 Range 测量 <li> 首行文字的真实矩形，
+ * 与 renderTextNode 采用一致的坐标换算，使 marker 与首行文字精确对齐；
+ * 多行 li 也只对齐首行，而非整框中点。
+ * - list-style-type: none 或存在 list-style-image 时不绘制
+ * - disc/circle 用圆形，square 用小方块，其余（decimal 等）按 "N." 文本绘制
+ */
+function drawListMarker(ctx: RenderContext, li: HTMLElement): void {
+  const styles = window.getComputedStyle(li)
+  if (styles.display === 'none' || styles.visibility === 'hidden') return
+
+  const type = styles.listStyleType
+  if (type === 'none' || styles.listStyleImage !== 'none') return
+
+  // 用 Range 取首行内容矩形（getClientRects()[0] 即首个行盒），回退到 li 边框盒
+  const range = document.createRange()
+  range.selectNodeContents(li)
+  const rects = range.getClientRects()
+  const lineRect = rects.length > 0 ? rects[0] : li.getBoundingClientRect()
+  if (lineRect.height === 0) return
+
+  const pageIndex = findPageIndex(ctx, li)
+  if (pageIndex >= ctx.pages.length) return
+  const page = ctx.pages[pageIndex]
+  const pageRect = pageIndex < ctx.pageRects.length ? ctx.pageRects[pageIndex] : ctx.containerRect
+
+  const fontSize = pxToPt(parseFloat(styles.fontSize))
+  const font = selectFont(ctx, styles.fontWeight)
+  const color = parseColor(styles.color)
+  const fill = rgb(color.r, color.g, color.b)
+
+  // 与 renderTextNode 完全一致的换算：x 相对容器左缘，y 相对所属页顶
+  const contentLeft = pxToPt(lineRect.left - ctx.containerRect.left)
+  const lineTop = pxToPt(lineRect.top - pageRect.top)
+  const lineHeightPt = pxToPt(lineRect.height)
+  // 首行文字基线（行盒顶 + 基线偏移），PDF 坐标自下而上
+  const baselineY = ctx.pageHeight - lineTop - baselineFromTop(font, fontSize, lineHeightPt)
+
+  // 圆点/方块类 marker：绘制在内容左缘左侧的留白区
+  if (type === 'disc' || type === 'circle' || type === 'square') {
+    const glyphSize = fontSize * 0.32
+    // 水平：中心位于内容左缘左侧约 0.8em（与浏览器 outside 定位的 marker 留白相当）
+    const cx = contentLeft - fontSize * 0.8
+    // 垂直：对齐小写字母视觉中线（基线上方约 ascent 的一半 ≈ 0.26em）
+    const cy = baselineY + fontSize * 0.26
+    if (type === 'square') {
+      page.drawRectangle({
+        x: cx - glyphSize / 2,
+        y: cy - glyphSize / 2,
+        width: glyphSize,
+        height: glyphSize,
+        color: fill,
+      })
+    } else if (type === 'circle') {
+      page.drawEllipse({
+        x: cx,
+        y: cy,
+        xScale: glyphSize / 2,
+        yScale: glyphSize / 2,
+        borderColor: fill,
+        borderWidth: pxToPt(1),
+      })
+    } else {
+      page.drawEllipse({ x: cx, y: cy, xScale: glyphSize / 2, yScale: glyphSize / 2, color: fill })
+    }
+    return
+  }
+
+  // 文本类 marker（decimal 等）：绘制 "N."，右对齐到内容左缘左侧
+  const ordinal = listItemOrdinal(li)
+  const label = `${ordinal}.`
+  const labelWidth = font.widthOfTextAtSize(label, fontSize)
+  try {
+    page.drawText(label, {
+      x: contentLeft - labelWidth - fontSize * 0.25,
+      y: baselineY,
+      size: fontSize,
+      font,
+      color: fill,
+    })
+  } catch (error) {
+    console.warn('Failed to draw list marker:', label, error)
   }
 }
 

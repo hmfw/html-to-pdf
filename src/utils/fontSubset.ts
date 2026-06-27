@@ -40,6 +40,16 @@ export function extractUsedCharacters(element: HTMLElement): Set<string> {
 
   traverse(element)
 
+  // 列表项的有序 marker（"1." "2." …）不是 DOM 文本节点，需额外纳入子集，
+  // 否则导出时数字/点会因缺字形而绘制失败。圆点/方块 marker 用图形绘制，无需字形。
+  const hasOrderedList =
+    element.tagName === 'OL' ||
+    element.tagName === 'LI' ||
+    !!element.querySelector?.('ol, li')
+  if (hasOrderedList) {
+    for (const ch of '0123456789.') chars.add(ch)
+  }
+
   return chars
 }
 
