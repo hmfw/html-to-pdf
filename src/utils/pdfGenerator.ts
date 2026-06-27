@@ -1,16 +1,11 @@
 import { PDFDocument, PDFFont, StandardFonts } from '@pdfme/pdf-lib'
 import * as fontkit from 'fontkit'
-import type { PdfExportOptions, PdfGenerateResult } from '../types'
-import { renderHTML, type RenderContext } from './pdfRenderer'
-import { createFontSubsetsForElement } from './fontSubset'
-import { createPerformanceMonitor, type PerformanceMonitor } from './performanceMonitor'
-import { PDF_PAGE_ATTR } from '../constants'
-
-/** 默认字体路径 */
-const DEFAULT_FONT_URLS = {
-  regular: '/fonts/Source_Han_Sans_SC_Regular.otf',
-  bold: '/fonts/Source_Han_Sans_SC_Bold.otf',
-}
+import type { PdfExportOptions, PdfGenerateResult } from '../types.js'
+import { renderHTML, type RenderContext } from './pdfRenderer.js'
+import { createFontSubsetsForElement } from './fontSubset.js'
+import { loadFontWithFallback } from './fontLoader.js'
+import { createPerformanceMonitor, type PerformanceMonitor } from './performanceMonitor.js'
+import { PDF_PAGE_ATTR } from '../constants.js'
 
 /**
  * 标准化边距
@@ -50,28 +45,30 @@ async function embedChineseFonts(
   subset: boolean,
   monitor: PerformanceMonitor,
 ): Promise<{ regular: PDFFont; bold?: PDFFont }> {
-  // 合并自定义路径和默认路径（始终加载 Regular 和 Bold 两个字重）
-  const fontUrls: { regular: string; bold: string } = {
-    regular: customFontPaths?.regular || DEFAULT_FONT_URLS.regular,
-    bold: customFontPaths?.bold || DEFAULT_FONT_URLS.bold,
-  }
+  // 统一通过 fontLoader 加载字体（多源降级，兼顾国内网络与离线/内网），
+  // 始终加载 Regular 和 Bold 两个字重。Regular 必需，Bold 失败时降级为无粗体。
+  const [regularBuf, boldBuf] = await Promise.all([
+    loadFontWithFallback('regular', customFontPaths?.regular),
+    loadFontWithFallback('bold', customFontPaths?.bold).catch((err) => {
+      console.warn('[html-to-pdf] Bold 字重加载失败，将仅使用 Regular:', err)
+      return undefined
+    }),
+  ])
+  monitor.mark('加载字体')
 
   // 不子集化：直接嵌入完整字体文件
   if (!subset) {
-    const [regularBuf, boldBuf] = await Promise.all([
-      fetch(fontUrls.regular).then((r) => r.arrayBuffer()),
-      fetch(fontUrls.bold).then((r) => r.arrayBuffer()),
-    ])
-    monitor.mark('加载完整字体')
-
     const regular = await pdfDoc.embedFont(regularBuf, { subset: false })
-    const bold = await pdfDoc.embedFont(boldBuf, { subset: false })
+    const bold = boldBuf ? await pdfDoc.embedFont(boldBuf, { subset: false }) : undefined
     monitor.mark('嵌入完整字体')
 
     return { regular, bold }
   }
 
-  const subsets = await createFontSubsetsForElement(element, fontUrls)
+  const subsets = await createFontSubsetsForElement(element, {
+    regular: regularBuf,
+    bold: boldBuf,
+  })
   monitor.mark('创建字体子集')
 
   if (!subsets.regular) {
@@ -161,7 +158,7 @@ function computePages(
  * @returns 包含 blob 的结果对象
  */
 export async function htmlToPdf(element: HTMLElement, options: PdfExportOptions = {}): Promise<PdfGenerateResult> {
-  const monitor = createPerformanceMonitor()
+  const monitor = createPerformanceMonitor(options.debug)
   monitor.start()
 
   try {

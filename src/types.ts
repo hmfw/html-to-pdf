@@ -8,7 +8,14 @@ export interface PdfExportOptions {
   /** 边距 */
   margin?: number | { top: number; right: number; bottom: number; left: number }
   /**
-   * 自定义字体路径（覆盖默认的思源黑体）
+   * 自定义字体路径（覆盖默认的思源黑体）。
+   *
+   * 不传时，库会按「`/fonts/<文件名>` → npmmirror → jsDelivr → unpkg」的顺序
+   * 自动降级加载随包发布的思源黑体，无需配置即可在国内外使用。
+   *
+   * 一旦显式提供某字重的路径，则只使用该路径，加载失败会直接报错
+   * （不会静默回退到默认字体）。
+   *
    * @example
    * ```typescript
    * {
@@ -18,9 +25,9 @@ export interface PdfExportOptions {
    * ```
    */
   fontPaths?: {
-    /** 中文 Regular 字体 URL（默认：/fonts/Source_Han_Sans_SC_Regular.otf） */
+    /** 中文 Regular 字体 URL（默认自动从本地/CDN 加载思源黑体 Regular） */
     regular?: string
-    /** 中文 Bold 字体 URL（默认：/fonts/Source_Han_Sans_SC_Bold.otf） */
+    /** 中文 Bold 字体 URL（默认自动从本地/CDN 加载思源黑体 Bold） */
     bold?: string
   }
   /**
@@ -63,6 +70,11 @@ export interface PdfExportOptions {
    * 仅当 canvas 命中全局 `window.echarts` 实例、且未被 `canvasResolver` 处理时生效。
    */
   canvasPixelRatio?: number
+  /**
+   * 是否在控制台输出各阶段耗时的性能报告（默认 `false`）。
+   * 仅用于本地调试；默认关闭，避免污染使用方的控制台。
+   */
+  debug?: boolean
 }
 
 export interface PdfGenerateResult {

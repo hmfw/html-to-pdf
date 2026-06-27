@@ -29,12 +29,42 @@ pnpm add @hmfw/html-to-pdf
 
 > 本库不依赖任何 UI 框架，在 Vue / React / 原生 JS 中用法相同。
 
+## 浏览器支持
+
+本库在浏览器端运行，依赖现代 DOM 与网络 API（`Range`、`getBoundingClientRect`、`AbortController`、可选链等），仅支持现代浏览器，**不支持 IE**：
+
+| 浏览器 | 最低版本 |
+|--------|---------|
+| Chrome | 90 |
+| Firefox | 88 |
+| Safari | 14 |
+| Edge | 90 |
+
 ## 字体配置
 
-本库需要思源黑体文件才能正确渲染中文。字体已随仓库提供，位于 `public/fonts/`，运行时通过以下路径加载，无需额外配置：
+本库需要思源黑体文件才能正确渲染中文。字体随 npm 包一起发布（构建时复制到 `dist/fonts/`），**默认无需任何配置**。
 
-- `/fonts/Source_Han_Sans_SC_Regular.otf`（必需，Regular 字重）
-- `/fonts/Source_Han_Sans_SC_Bold.otf`（可选，Bold 字重）
+运行时按以下顺序自动降级加载，兼顾国内网络与离线/内网部署，任一来源成功即停止：
+
+1. `/fonts/Source_Han_Sans_SC_Regular.otf`（应用自托管的本地路径，离线/内网首选）
+2. `https://registry.npmmirror.com/...`（国内镜像，淘宝）
+3. `https://cdn.jsdelivr.net/...`（jsDelivr，国内有节点）
+4. `https://unpkg.com/...`（国际兜底）
+
+> 想完全离线 / 内网部署：把 `dist/fonts/` 下的两个 otf 放到你站点的 `/fonts/` 目录即可命中第 1 步，不再发起任何外部请求。
+
+### 自定义字体
+
+通过 `options.fontPaths` 指定自己的字体地址（本地路径或 CDN URL）。一旦指定，就只使用该地址，加载失败会直接报错，不会静默回退到思源黑体：
+
+```ts
+await htmlToPdf(element, {
+  fontPaths: {
+    regular: '/fonts/MyFont-Regular.otf',
+    bold: '/fonts/MyFont-Bold.otf',
+  },
+})
+```
 
 > 当前 PDF 生成只使用 Regular 和 Bold 两个字重。`src/styles/fonts.css` 中声明的其它字重仅用于网页预览。
 

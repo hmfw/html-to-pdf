@@ -2,17 +2,21 @@
 
 ## 问题背景
 
-默认情况下，库使用硬编码的思源黑体路径：
-```typescript
-/fonts/Source_Han_Sans_SC_Regular.otf
-/fonts/Source_Han_Sans_SC_Bold.otf
+默认情况下，库会自动加载随包发布的思源黑体，按以下顺序降级，**无需任何配置**：
+
+```text
+1. /fonts/Source_Han_Sans_SC_*.otf        （应用自托管的本地路径）
+2. https://registry.npmmirror.com/...       （国内镜像）
+3. https://cdn.jsdelivr.net/...             （jsDelivr）
+4. https://unpkg.com/...                    （国际兜底）
 ```
 
-这在以下场景下不够灵活：
-- ✗ 字体文件部署在不同路径（如 CDN）
-- ✗ 使用其他中文字体（如微软雅黑、阿里巴巴普惠体）
-- ✗ 应用部署在子目录（如 `/app/fonts/`）
-- ✗ 需要从外部 URL 加载字体
+但以下场景仍需通过 `fontPaths` 自定义：
+- 使用其他中文字体（如微软雅黑、阿里巴巴普惠体）
+- 字体托管在自有 CDN / 私有源
+- 应用部署在子目录，本地路径不是 `/fonts/`
+
+> 一旦显式提供某字重的 `fontPaths`，就只使用该地址，加载失败会直接报错，不会回退到思源黑体或上述 CDN。
 
 ---
 
@@ -37,11 +41,10 @@ await htmlToPdf(element, {
 ### 只覆盖部分路径
 
 ```typescript
-// 只改 Regular，Bold 使用默认路径
+// 只改 Regular；Bold 未指定，仍走默认的「本地 → CDN」降级加载
 await htmlToPdf(element, {
   fontPaths: {
     regular: '/fonts/CustomFont-Regular.otf'
-    // bold 使用默认：/fonts/Source_Han_Sans_SC_Bold.otf
   }
 })
 ```

@@ -13,5 +13,9 @@
     "src/constants.ts",
     "src/utils/**/*.ts",
     "src/types/**/*.d.ts"
+  ],
+  "exclude": [
+    "src/**/*.test.ts",
+    "src/**/*.spec.ts"
   ]
 }

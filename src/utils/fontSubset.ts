@@ -45,14 +45,14 @@ export function extractUsedCharacters(element: HTMLElement): Set<string> {
 
 /**
  * 创建字体子集
+ *
+ * @param fontBuffer 已加载的完整字体 ArrayBuffer（加载/降级逻辑见 fontLoader）
+ * @param characters 需要保留的字符集合
  */
 export async function createFontSubset(
-  fontUrl: string,
+  fontBuffer: ArrayBuffer,
   characters: Set<string>
 ): Promise<ArrayBuffer> {
-  // 加载字体
-  const fontResponse = await fetch(fontUrl)
-  const fontBuffer = await fontResponse.arrayBuffer()
   const font = opentype.parse(fontBuffer) as any
 
   // 获取字体元信息
@@ -88,10 +88,13 @@ export async function createFontSubset(
 
 /**
  * 为 HTML 元素创建字体子集映射
+ *
+ * @param element 待扫描的元素
+ * @param fontBuffers 各字重已加载的完整字体 ArrayBuffer（加载/降级见 fontLoader）
  */
 export async function createFontSubsetsForElement(
   element: HTMLElement,
-  fontUrls: { regular?: string; bold?: string; medium?: string }
+  fontBuffers: { regular?: ArrayBuffer; bold?: ArrayBuffer; medium?: ArrayBuffer }
 ): Promise<{
   regular?: ArrayBuffer
   bold?: ArrayBuffer
@@ -108,9 +111,9 @@ export async function createFontSubsetsForElement(
   // 并行创建所有字体子集
   const tasks: Promise<void>[] = []
 
-  if (fontUrls.regular) {
+  if (fontBuffers.regular) {
     tasks.push(
-      createFontSubset(fontUrls.regular, characters)
+      createFontSubset(fontBuffers.regular, characters)
         .then(buffer => {
           subsets.regular = buffer
         })
@@ -120,9 +123,9 @@ export async function createFontSubsetsForElement(
     )
   }
 
-  if (fontUrls.bold) {
+  if (fontBuffers.bold) {
     tasks.push(
-      createFontSubset(fontUrls.bold, characters)
+      createFontSubset(fontBuffers.bold, characters)
         .then(buffer => {
           subsets.bold = buffer
         })
@@ -132,9 +135,9 @@ export async function createFontSubsetsForElement(
     )
   }
 
-  if (fontUrls.medium) {
+  if (fontBuffers.medium) {
     tasks.push(
-      createFontSubset(fontUrls.medium, characters)
+      createFontSubset(fontBuffers.medium, characters)
         .then(buffer => {
           subsets.medium = buffer
         })

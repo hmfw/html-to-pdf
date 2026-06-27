@@ -14,9 +14,9 @@ import {
   clip,
   endPath,
 } from '@pdfme/pdf-lib'
-import { pxToPt, parseColor } from './htmlParser'
-import { loadImageAsArrayBuffer, canvasToArrayBuffer, detectImageFormat, tryEChartsHighRes, canvasSourceToArrayBuffer } from './imageHelper'
-import { PDF_CONTAINER_ATTR, PDF_PAGE_ATTR } from '../constants'
+import { pxToPt, parseColor } from './htmlParser.js'
+import { loadImageAsArrayBuffer, canvasToArrayBuffer, detectImageFormat, tryEChartsHighRes, canvasSourceToArrayBuffer } from './imageHelper.js'
+import { PDF_CONTAINER_ATTR, PDF_PAGE_ATTR } from '../constants.js'
 
 export interface RenderContext {
   pdfDoc: PDFDocument

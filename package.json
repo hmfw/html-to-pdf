@@ -11,20 +11,21 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.mjs",
       "require": "./dist/index.cjs"
-    },
-    "./style.css": "./dist/style.css"
+    }
   },
   "files": [
     "dist",
-    "README.md"
+    "README.md",
+    "CHANGELOG.md"
   ],
   "scripts": {
     "dev": "vite",
-    "build": "vite build && tsc -p tsconfig.build.json --declaration --emitDeclarationOnly",
+    "build": "npm run type-check && vite build && tsc -p tsconfig.build.json --declaration --emitDeclarationOnly",
     "preview": "vite preview",
     "type-check": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "prepublishOnly": "npm run test && npm run build && npm pack --dry-run"
   },
   "keywords": [
     "pdf",
@@ -39,6 +40,13 @@
   ],
   "author": "",
   "license": "MIT",
+  "browserslist": [
+    "Chrome >= 90",
+    "Firefox >= 88",
+    "Safari >= 14",
+    "Edge >= 90",
+    "not IE 11"
+  ],
   "dependencies": {
     "@pdfme/pdf-lib": "^6.1.10",
     "fontkit": "^2.0.2",
