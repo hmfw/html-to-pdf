@@ -9,7 +9,7 @@
       <div ref="pdfContainer" data-pdf class="pdf-document">
         <!-- 第 1 页：文本、颜色、字重、斜体 -->
         <div data-pdf-page class="pdf-page">
-          <h2>第 1 页 · 文本与排版</h2>
+          <h2 style="margin-top: 0;">第 1 页 · 文本与排版</h2>
 
           <h3>中英文混排</h3>
           <p>这是一段中文文本，使用思源黑体显示。</p>
@@ -265,6 +265,39 @@
       {{ isExporting ? '生成中...' : '导出 PDF' }}
     </button>
     <div v-if="errorMessage" class="error-message">错误：{{ errorMessage }}</div>
+
+    <h1 style="margin-top: 48px">自动分页示例（无 data-pdf-page）</h1>
+    <p class="intro">
+      下面的容器只标了 <code>data-pdf</code>，没有任何 <code>data-pdf-page</code>。内容超过一页时会按内容流自动分页，
+      并尽量在段落 / 图片 / 表格行边界断页。
+    </p>
+
+    <div class="demo-section">
+      <div ref="autoContainer" data-pdf class="pdf-document auto-doc">
+        <h2 style="margin-top: 0;">自动分页长文档</h2>
+        <p v-for="n in 24" :key="'p' + n">
+          第 {{ n }} 段：这是一段用于演示自动分页的长文本。库会遍历段落、标题、图片、表格行等不可分割的「叶子块」，
+          累计高度超过一页可用区域时，在下一个块的顶部断页，使其整体落到下一页，从而避免文字被切成半行。
+          中英文混排示例 Auto pagination keeps each block intact across page boundaries.
+        </p>
+        <table class="data-table">
+          <thead>
+            <tr><th>序号</th><th>任务</th><th>状态</th></tr>
+          </thead>
+          <tbody>
+            <tr v-for="n in 30" :key="'r' + n">
+              <td>{{ n }}</td>
+              <td>自动分页表格行 {{ n }}</td>
+              <td>{{ n % 3 === 0 ? '已完成' : '进行中' }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <button class="export-btn" @click="handleExportAuto" :disabled="isExportingAuto">
+      {{ isExportingAuto ? '生成中...' : '导出自动分页 PDF' }}
+    </button>
   </div>
 </template>
 
@@ -275,7 +308,9 @@ import iconImage from './assets/icon_2.png'
 
 const demoCanvas = ref<HTMLCanvasElement | null>(null)
 const pdfContainer = ref<HTMLElement | null>(null)
+const autoContainer = ref<HTMLElement | null>(null)
 const isExporting = ref(false)
+const isExportingAuto = ref(false)
 const errorMessage = ref('')
 
 // 第 5 页大表格的数据
@@ -344,6 +379,31 @@ async function handleExport() {
     isExporting.value = false
   }
 }
+
+async function handleExportAuto() {
+  if (!autoContainer.value) {
+    errorMessage.value = '未找到自动分页容器'
+    return
+  }
+
+  isExportingAuto.value = true
+  errorMessage.value = ''
+
+  try {
+    const result = await htmlToPdf(autoContainer.value, {
+      filename: 'auto-pagination-demo',
+    })
+
+    if (!result.success) {
+      throw result.error || new Error('PDF 生成失败')
+    }
+  } catch (error) {
+    console.error('导出失败:', error)
+    errorMessage.value = error instanceof Error ? error.message : '未知错误'
+  } finally {
+    isExportingAuto.value = false
+  }
+}
 </script>
 
 <style>
@@ -380,10 +440,15 @@ h1 {
   box-sizing: border-box;
 }
 
-.pdf-page {
+/* 自动分页容器：页边距由这里的 padding 推导（所见即所得） */
+.auto-doc {
+  padding: 40px;
+}
+
+/* .pdf-page {
   padding: 20px;
   box-sizing: border-box;
-}
+} */
 
 .content-box h3 {
   margin-top: 24px;

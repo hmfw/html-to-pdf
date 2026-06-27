@@ -34,7 +34,7 @@
 import { PDF_CONTAINER_ATTR, PDF_PAGE_ATTR } from '@hmfw/html-to-pdf'
 ```
 
-不加任何分页标记时，整个根元素导出为单页。
+不加任何分页标记时，会按内容流**自动分页**：内容超过一页时自动切成多页，并尽量在段落、图片、表格行等不可分割元素的边界断页，避免半行被切断。内容放得下时仍是单页。页边距「所见即所得」——直接由容器自身的 CSS `padding` 推导（上下留白 = padding-top/bottom，左右 = padding-left/right），无需额外配置。需要精确控制分页位置时，改用 `data-pdf-page` 手动标记。
 
 ## 字体
 
@@ -178,7 +178,6 @@ Angular、Svelte、Solid 等同理：拿到模板中的 DOM 元素引用（`@Vie
   filename?: string                                   // 文件名（不含扩展名），默认 'document'
   pageSize?: 'A4' | 'A3' | 'Letter'                   // 或自定义 { width, height }（单位 pt），默认 'A4'
   orientation?: 'portrait' | 'landscape'              // 页面方向，默认 'portrait'
-  margin?: number | { top, right, bottom, left }      // 边距（pt），默认 40
   fontPaths?: { regular?, bold? }                     // 自定义字体路径（可选）
   fontSubset?: boolean                                // 是否子集化字体，默认 true
   canvasResolver?: (canvas) => string | ArrayBuffer | null // 自定义 canvas 图片来源（高清图表），null 走默认逻辑

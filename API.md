@@ -38,9 +38,6 @@ interface PdfExportOptions {
   /** 页面方向，默认 'portrait' */
   orientation?: 'portrait' | 'landscape'
   
-  /** 边距（pt），默认 40 */
-  margin?: number | { top: number; right: number; bottom: number; left: number }
-  
   /** 自定义字体路径（可选，覆盖默认思源黑体） */
   fontPaths?: {
     regular?: string
@@ -54,10 +51,19 @@ interface PdfExportOptions {
 
 ## HTML 标记
 
-使用 `data-pdf` 和 `data-pdf-page` 属性标记导出内容：
+用 `data-pdf` 标记导出容器。分页有两种模式，按容器内是否含 `data-pdf-page` 自动选择：
+
+- **自动分页**（容器内无 `data-pdf-page`）：内容超过一页时按内容流自动切页，尽量在段落/图片/表格行边界断页；页边距由容器自身的 CSS `padding` 推导（所见即所得）。
+- **手动分页**（含 `data-pdf-page`）：每个 `data-pdf-page` 对应一个 PDF 页面，精确可控。
 
 ```html
-<!-- 标记整个导出容器 -->
+<!-- 自动分页：只标记容器，内容超长自动续页 -->
+<div data-pdf>
+  <h1>长文档</h1>
+  <p>内容...</p>
+</div>
+
+<!-- 手动分页：每个 data-pdf-page 一页 -->
 <div data-pdf>
   <!-- 第 1 页 -->
   <div data-pdf-page>

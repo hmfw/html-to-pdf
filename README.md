@@ -13,7 +13,7 @@
 - 默认支持中文，内置思源黑体（Source Han Sans SC）
 - **自动字体子集化**：只嵌入页面实际用到的字形，文件通常约 500KB
 - 完整的 TypeScript 类型支持
-- 支持多页文档（`data-pdf-page` 手动分页）
+- 支持多页文档（内容流**自动分页**，或 `data-pdf-page` 手动分页）
 - 支持常见 HTML/CSS：标题、段落、列表、表格、图片、Canvas、引用、代码块、粗体、斜体、颜色、背景、边框、圆角
 - **实验性支持** `::before` / `::after` 伪元素（仅背景色和边框，需明确尺寸）
 
@@ -199,7 +199,6 @@ await htmlToPdf(element, { fontSubset: false })
   filename?: string                                   // 文件名（不含扩展名），默认 'document'
   pageSize?: 'A4' | 'A3' | 'Letter'                   // 或自定义 { width, height }（单位 pt），默认 'A4'
   orientation?: 'portrait' | 'landscape'              // 页面方向，默认 'portrait'
-  margin?: number | { top, right, bottom, left }      // 边距（pt），默认 40
   fontPaths?: {                                       // 自定义字体路径（可选）
     regular?: string                                  // Regular 字体 URL，默认 '/fonts/Source_Han_Sans_SC_Regular.otf'
     bold?: string                                     // Bold 字体 URL，默认 '/fonts/Source_Han_Sans_SC_Bold.otf'
@@ -244,7 +243,28 @@ await htmlToPdf(element, {
 
 ## 多页文档
 
-给导出根元素加 `data-pdf`，每个 `data-pdf-page` 标记一个 PDF 页面：
+库提供两种分页模式，按容器内是否有 `data-pdf-page` 标记**自动选择**。
+
+### 自动分页（默认，无需标记）
+
+不加任何分页标记时，内容超过一页会**按内容流自动分页**。切页时尽量落在段落、标题、图片、表格行等不可分割元素的边界上，避免文字被切成半行：
+
+```html
+<div data-pdf>
+  <h1>很长的报告</h1>
+  <p>第一段……</p>
+  <!-- 内容超过一页时自动续到下一页 -->
+  <table>...</table>
+</div>
+```
+
+- 页边距「所见即所得」：直接由 `data-pdf` 容器自身的 CSS `padding` 推导。上下留白 = `padding-top` / `padding-bottom`，左右留白 = `padding-left` / `padding-right`。给容器设 `padding: 40px` 即可让四边都留白，浏览器预览与 PDF 一致，无需额外配置。
+- 内容放得下时仍输出单页。
+- 已知限制：跨页的容器背景/边框只绘制在起始页；单个元素本身高于一页内容区时会溢出页底（不再细分）；表头不会在每页重复。背景建议放在会被分页的叶子元素上而非大包装容器。
+
+### 手动分页（data-pdf-page）
+
+需要精确控制每页内容时，给导出根元素加 `data-pdf`，每个 `data-pdf-page` 标记一个 PDF 页面：
 
 ```html
 <div data-pdf>
@@ -264,10 +284,10 @@ await htmlToPdf(element, {
 
 **注意：**
 
+- 只要容器内存在任一 `data-pdf-page`，即进入手动分页模式（不再自动分页）
 - `data-pdf-page` 可以不是 `data-pdf` 容器的直接子元素，允许在中间嵌套任意包装元素
 - `data-pdf-page` 之间不可嵌套（一个 page 内部不能包含另一个 page）
 - 每个 `data-pdf-page` 内部可包含任意 HTML 结构
-- 不使用 `data-pdf-page` 时，整个容器导出为单页
 
 ## 支持的 HTML / CSS
 
@@ -308,7 +328,7 @@ npm run type-check
 2. **字体子集化**：默认启用以减小文件体积，可用 `fontSubset: false` 关闭
 3. **坐标渲染**：基于 DOM 实际布局绘制，元素需先完成渲染
 4. **样式覆盖**：支持基础样式，复杂效果（阴影、渐变等）不会被渲染
-5. **多页支持**：使用 `data-pdf-page` 标记实现精确分页控制
+5. **多页支持**：默认按内容流自动分页；需要精确控制时用 `data-pdf-page` 标记手动分页
 
 ## License
 

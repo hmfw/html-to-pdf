@@ -5,8 +5,6 @@ export interface PdfExportOptions {
   pageSize?: 'A4' | 'A3' | 'Letter' | { width: number; height: number }
   /** 页面方向 */
   orientation?: 'portrait' | 'landscape'
-  /** 边距 */
-  margin?: number | { top: number; right: number; bottom: number; left: number }
   /**
    * 自定义字体路径（覆盖默认的思源黑体）。
    *
