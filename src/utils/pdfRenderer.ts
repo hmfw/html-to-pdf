@@ -582,17 +582,17 @@ async function drawBoxLayer(ctx: RenderContext, element: HTMLElement): Promise<v
     drawElementBorders(element, box)
 
     // 3. img/canvas：先画边框，再画图片，最后画 ::before（图片覆盖边框，::before 覆盖图片）
-    // 有圆角时把图片裁成圆角矩形，避免方角溢出圆角边框
+    // 位图绘制在 content-box（内缩 border + padding），让边框露出；有圆角时把图片裁成圆角矩形
     if (tagName === 'img') {
-      const radius = getBorderRadiusPt(element)
-      await renderImage(ctx, box, radius, () => embedImageElement(ctx, element as HTMLImageElement))
+      const { box: contentBox, radius } = insetToContentBox(element, box, getBorderRadiusPt(element))
+      await renderImage(ctx, contentBox, radius, () => embedImageElement(ctx, element as HTMLImageElement))
       drawPseudoElement(ctx, element, '::before')
       return
     }
 
     if (tagName === 'canvas') {
-      const radius = getBorderRadiusPt(element)
-      await renderImage(ctx, box, radius, () => embedCanvasElement(ctx, element as HTMLCanvasElement))
+      const { box: contentBox, radius } = insetToContentBox(element, box, getBorderRadiusPt(element))
+      await renderImage(ctx, contentBox, radius, () => embedCanvasElement(ctx, element as HTMLCanvasElement))
       drawPseudoElement(ctx, element, '::before')
       return
     }
@@ -845,6 +845,35 @@ const IMAGE_ERROR_STYLE = {
 function getBorderRadiusPt(element: HTMLElement): number {
   const borderRadius = parseFloat(window.getComputedStyle(element).borderRadius) || 0
   return borderRadius > 0 ? pxToPt(borderRadius) : 0
+}
+
+/**
+ * 将 border-box 的 box 内缩到 content-box。
+ * resolveBox 用 getBoundingClientRect（border-box）定位，但 <img>/<canvas> 的位图
+ * 内容只占 content-box（不含 border、padding）。若按 border-box 铺满位图，会盖住先画的边框。
+ * 内缩后位图正好落在内容区，边框得以露出。圆角同步内缩半个边宽，保持与边框内缘贴合。
+ */
+function insetToContentBox(element: HTMLElement, box: ResolvedBox, radius: number): { box: ResolvedBox; radius: number } {
+  const styles = window.getComputedStyle(element)
+  const top = pxToPt((parseFloat(styles.borderTopWidth) || 0) + (parseFloat(styles.paddingTop) || 0))
+  const right = pxToPt((parseFloat(styles.borderRightWidth) || 0) + (parseFloat(styles.paddingRight) || 0))
+  const bottom = pxToPt((parseFloat(styles.borderBottomWidth) || 0) + (parseFloat(styles.paddingBottom) || 0))
+  const left = pxToPt((parseFloat(styles.borderLeftWidth) || 0) + (parseFloat(styles.paddingLeft) || 0))
+
+  // PDF 坐标系 Y 轴向上：底部 y 上移 bottom 内缩量，高度减去上下内缩量
+  const insetBox: ResolvedBox = {
+    page: box.page,
+    x: box.x + left,
+    y: box.y + bottom,
+    width: Math.max(0, box.width - left - right),
+    height: Math.max(0, box.height - top - bottom),
+  }
+
+  // 内容区圆角 = 外圆角 - 边框宽度（取上/左边框近似），收敛到非负
+  const borderInset = pxToPt(Math.max(parseFloat(styles.borderTopWidth) || 0, parseFloat(styles.borderLeftWidth) || 0))
+  const insetRadius = radius > 0 ? Math.max(0, radius - borderInset) : 0
+
+  return { box: insetBox, radius: insetRadius }
 }
 
 /**
