@@ -1,7 +1,9 @@
 <template>
   <div id="app">
     <h1>HTML to PDF 工具函数示例</h1>
-    <p class="intro">下面是一个多页文档，覆盖库支持的全部内容与样式特性。点击下方按钮即可导出 PDF。</p>
+    <p class="intro">
+      下面是一个多页文档，覆盖库支持的内容与样式特性，并包含若干边界用例。点击下方按钮即可导出 PDF。
+    </p>
 
     <div class="demo-section">
       <div ref="pdfContainer" data-pdf class="pdf-document">
@@ -34,14 +36,22 @@
           <h2>第 2 页 · 盒子样式与结构</h2>
 
           <h3>背景与透明度</h3>
-          <div style="background-color: #fff3e0; padding: 12px; margin-bottom: 8px">纯色背景块（#fff3e0）</div>
-          <div style="background-color: rgba(33, 150, 243, 0.2); padding: 12px">半透明背景块（rgba 透明度）</div>
+          <div style="background-color: #fff3e0; padding: 12px; margin-bottom: 8px">
+            纯色背景块（#fff3e0）
+          </div>
+          <div style="background-color: rgba(33, 150, 243, 0.2); padding: 12px">
+            半透明背景块（rgba 透明度）
+          </div>
 
           <h3>边框与圆角</h3>
-          <div style="border: 2px solid #4caf50; border-radius: 8px; padding: 12px; margin-bottom: 8px">
+          <div
+            style="border: 2px solid #4caf50; border-radius: 8px; padding: 12px; margin-bottom: 8px"
+          >
             统一边框 + 圆角
           </div>
-          <div style="border-left: 4px solid #e91e63; border-bottom: 2px solid #999999; padding: 12px">
+          <div
+            style="border-left: 4px solid #e91e63; border-bottom: 2px solid #999999; padding: 12px"
+          >
             逐边不同的边框
           </div>
 
@@ -58,12 +68,8 @@
           </blockquote>
 
           <h3>伪元素装饰（实验性）</h3>
-          <div class="card-with-bar">
-            带装饰条的卡片（::before）
-          </div>
-          <div class="badge-box">
-            带角标的盒子（::after）
-          </div>
+          <div class="card-with-bar">带装饰条的卡片（::before）</div>
+          <div class="badge-box">带角标的盒子（::after）</div>
         </div>
 
         <!-- 第 3 页：表格、图片、Canvas、代码块 -->
@@ -115,6 +121,142 @@
   filename: 'document'
 });</code></pre>
         </div>
+
+        <!-- 第 4 页：列表 / 长文本换行 / 行内混排 -->
+        <div data-pdf-page class="pdf-page">
+          <h2>第 4 页 · 列表与长文本</h2>
+
+          <h3>有序列表（ol）</h3>
+          <ol>
+            <li>第一步：准备 DOM 元素</li>
+            <li>第二步：调用 htmlToPdf</li>
+            <li>第三步：保存返回的 Blob</li>
+          </ol>
+
+          <h3>嵌套列表</h3>
+          <ul>
+            <li>
+              前端框架
+              <ul>
+                <li>Vue</li>
+                <li>React</li>
+              </ul>
+            </li>
+            <li>
+              构建工具
+              <ul>
+                <li>Vite</li>
+                <li>Webpack</li>
+              </ul>
+            </li>
+          </ul>
+
+          <h3>长段落自动换行</h3>
+          <p class="long-text">
+            这是一段较长的中文段落，用于测试文本在容器宽度内的自动换行行为。HTML to PDF 通过解析真实
+            DOM 布局来定位每一个文本节点，因此换行结果应当与浏览器中看到的一致。This paragraph also
+            mixes English words to verify that Latin and CJK text wrap correctly within the same
+            line box when the content exceeds the available width.
+          </p>
+
+          <h3>行内混排（多色 / 字重）</h3>
+          <p>
+            <span style="color: #e91e63">红色</span>、<span style="color: #2196f3">蓝色</span
+            >、<span style="color: #4caf50; font-weight: 700">绿色加粗</span>，以及
+            <span style="font-style: italic">斜体片段</span> 在同一行内混排。
+          </p>
+
+          <h3>不支持的样式（应优雅降级）</h3>
+          <p style="text-decoration: underline">下划线文本（当前不绘制下划线，文字仍应正常显示）</p>
+          <p style="text-decoration: line-through">删除线文本（同上，仅文字渲染）</p>
+          <p>
+            含表情符号与特殊字符：★ ☎ ✓ © ® — 应正常显示；🚀😀 等星空平面 emoji 会被子集化过滤。
+          </p>
+        </div>
+
+        <!-- 第 5 页：嵌套盒子 / 较大表格 -->
+        <div data-pdf-page class="pdf-page">
+          <h2>第 5 页 · 嵌套结构与大表格</h2>
+
+          <h3>多层嵌套背景盒子</h3>
+          <div style="background-color: #e3f2fd; padding: 16px; border-radius: 8px">
+            外层（浅蓝）
+            <div
+              style="background-color: #fff3e0; padding: 16px; border-radius: 6px; margin-top: 8px"
+            >
+              中层（浅橙）
+              <div
+                style="
+                  background-color: #e8f5e9;
+                  padding: 16px;
+                  border-radius: 4px;
+                  margin-top: 8px;
+                "
+              >
+                内层（浅绿）— 测试嵌套背景与圆角的层叠绘制
+              </div>
+            </div>
+          </div>
+          <h3>较多行的表格（测试单页内排版）</h3>
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>编号</th>
+                <th>名称</th>
+                <th>状态</th>
+                <th>备注</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="row in tableRows" :key="row.id">
+                <td>{{ row.id }}</td>
+                <td>{{ row.name }}</td>
+                <td>{{ row.status }}</td>
+                <td>{{ row.note }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div data-pdf-page class="pdf-page">
+          <h3>合并单元格（colspan / rowspan）</h3>
+          <p class="hint">提示：合并单元格建议显式设置背景色，避免下层行条纹透出。</p>
+          <table class="data-table merge-table">
+            <thead>
+              <tr>
+                <th colspan="3">2024 年度考核（跨 3 列表头）</th>
+              </tr>
+              <tr>
+                <th>季度</th>
+                <th>指标</th>
+                <th>评分</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td rowspan="2" class="span-cell">上半年</td>
+                <td>交付质量</td>
+                <td>A</td>
+              </tr>
+              <tr>
+                <td>响应速度</td>
+                <td>B+</td>
+              </tr>
+              <tr>
+                <td rowspan="2" class="span-cell">下半年</td>
+                <td>交付质量</td>
+                <td>A+</td>
+              </tr>
+              <tr>
+                <td>响应速度</td>
+                <td>A</td>
+              </tr>
+              <tr>
+                <td colspan="2" class="span-cell">全年综合</td>
+                <td>A</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
 
@@ -134,6 +276,16 @@ const demoCanvas = ref<HTMLCanvasElement | null>(null)
 const pdfContainer = ref<HTMLElement | null>(null)
 const isExporting = ref(false)
 const errorMessage = ref('')
+
+// 第 5 页大表格的数据
+const tableRows = [
+  { id: 1, name: '需求评审', status: '已完成', note: '范围已确认' },
+  { id: 2, name: '接口设计', status: '已完成', note: '含字体降级方案' },
+  { id: 3, name: '渲染实现', status: '进行中', note: '矢量文本绘制' },
+  { id: 4, name: '单元测试', status: '进行中', note: 'Vitest 覆盖工具函数' },
+  { id: 5, name: '打包发布', status: '待开始', note: '字体随包发布' },
+  { id: 6, name: '文档完善', status: '待开始', note: '多框架使用说明' },
+]
 
 // 初始化 Canvas
 onMounted(() => {
@@ -303,6 +455,23 @@ button:disabled {
   background-color: #f9f9f9;
 }
 
+/* 合并单元格表格：给所有数据单元格显式不透明背景，
+   避免 rowspan 占位区下层的行条纹透出（PDF 逐元素绘制，透明单元格不会遮挡下层背景）。 */
+.merge-table td {
+  background-color: #ffffff;
+}
+
+.merge-table .span-cell {
+  background-color: #eef4ff;
+  font-weight: bold;
+}
+
+.hint {
+  margin: 4px 0 8px;
+  color: #888;
+  font-size: 13px;
+}
+
 /* 图片样式 */
 .image-container {
   margin: 16px 0;
@@ -322,6 +491,23 @@ button:disabled {
   border-radius: 8px;
   margin: 16px 0;
   display: block;
+}
+
+/* 列表与长文本 */
+ol,
+ul {
+  padding-left: 24px;
+  line-height: 1.6;
+  color: #333;
+}
+
+ul ul {
+  margin-top: 4px;
+}
+
+.long-text {
+  line-height: 1.7;
+  color: #333;
 }
 
 /* 引用样式 */
