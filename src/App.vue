@@ -15,6 +15,7 @@
           <p>这是一段中文文本，使用思源黑体显示。</p>
           <p>This is English text content.</p>
           <p>中英文混排：Hello 世界！数字 12345。</p>
+          <p><strong>1234567890abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ</strong></p>
 
           <h3>颜色</h3>
           <p style="color: #e91e63">hex 颜色文本（#e91e63）</p>
