@@ -43,6 +43,16 @@ interface PdfExportOptions {
     regular?: string  // 默认 '/fonts/Source_Han_Sans_SC_Regular.otf'
     bold?: string     // 默认 '/fonts/Source_Han_Sans_SC_Bold.otf'
   }
+
+  /**
+   * 部署基础路径，默认 '/'。
+   *
+   * 应用部署在子路径（非域名根目录）时，传入应用 base（如 Vite 的
+   * import.meta.env.BASE_URL），默认字体路径 /fonts/... 会自动带上该前缀，
+   * 避免被解析到域名根而 404。同时作用于默认主字体与按需加载的后备字体；
+   * 显式提供的 fontPaths 是完整 URL，不受影响。
+   */
+  basePath?: string
   
   /**
    * 使用自定义字体时，是否在检测到缺字时加载思源黑体作为后备字体（默认 true）

@@ -5,6 +5,15 @@
 格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [1.3.0] - 2026-06-29
+
+### Added
+
+- **部署基础路径可配置**：新增 `basePath` 选项（默认 `'/'`），解决应用部署在子路径（非域名根目录）时，内置思源黑体的默认路径 `/fonts/...` 被解析到域名根而非应用根、导致字体 404 的问题。传入应用 base（如 Vite 的 `import.meta.env.BASE_URL`、Webpack 的 `process.env.PUBLIC_URL`）即可让默认字体路径自动带上前缀。
+  - 一处配置同时作用于**默认主字体**与按需加载的**后备字体**两条路径。
+  - `basePath` 会归一化（自动补结尾 `/`），避免 `/myapp` 与 `fonts` 粘连。
+  - 行为向后兼容：默认 `'/'` 等同此前行为；显式提供的 `fontPaths` 是完整 URL，不受 `basePath` 影响。
+
 ## [1.2.1] - 2026-06-29
 
 ### Performance

@@ -297,6 +297,7 @@ await htmlToPdf(element, { fontSubset: false })
     regular?: string                                  // Regular 字体 URL，默认 '/fonts/Source_Han_Sans_SC_Regular.otf'
     bold?: string                                     // Bold 字体 URL，默认 '/fonts/Source_Han_Sans_SC_Bold.otf'
   }
+  basePath?: string                                   // 部署基础路径，默认 '/'。子路径部署时传入应用 base（如 Vite 的 import.meta.env.BASE_URL），默认字体路径自动带上前缀避免 404
   fontFallback?: boolean                              // 使用自定义字体时，检测到缺字才按需加载后备字体（思源黑体），默认 true
   fontSubset?: boolean                                // 是否子集化字体，默认 true（false 嵌入完整字体，文件显著增大）
   fontLoadTimeout?: number                            // 字体加载超时（毫秒），默认 30000（30 秒）。网络较慢时建议 45000-60000

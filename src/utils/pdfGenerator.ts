@@ -196,6 +196,7 @@ async function embedChineseFonts(
   monitor: PerformanceMonitor,
   timeout: number = 30000,
   enableFallback: boolean = true,
+  basePath: string = '/',
 ): Promise<{
   regular: PDFFont
   bold?: PDFFont
@@ -208,8 +209,8 @@ async function embedChineseFonts(
 
   // 始终加载 Regular 和 Bold 两个字重。Regular 必需，Bold 失败时降级为无粗体。
   const [regularBuf, boldBuf] = await Promise.all([
-    loadFontWithFallback('regular', customFontPaths?.regular, timeout),
-    loadFontWithFallback('bold', customFontPaths?.bold, timeout).catch((err) => {
+    loadFontWithFallback('regular', customFontPaths?.regular, timeout, basePath),
+    loadFontWithFallback('bold', customFontPaths?.bold, timeout, basePath).catch((err) => {
       console.warn('[html-to-pdf] Bold 字重加载失败，将仅使用 Regular:', err)
       return undefined
     }),
@@ -222,11 +223,11 @@ async function embedChineseFonts(
     hasCustomFont && enableFallback
       ? async () => {
           const [regular, bold] = await Promise.all([
-            loadFontWithFallback('regular', undefined, timeout).catch((err) => {
+            loadFontWithFallback('regular', undefined, timeout, basePath).catch((err) => {
               console.warn('[html-to-pdf] 后备字体 Regular 加载失败:', err)
               return undefined
             }),
-            loadFontWithFallback('bold', undefined, timeout).catch((err) => {
+            loadFontWithFallback('bold', undefined, timeout, basePath).catch((err) => {
               console.warn('[html-to-pdf] 后备字体 Bold 加载失败:', err)
               return undefined
             }),
@@ -298,6 +299,7 @@ export async function htmlToPdf(element: HTMLElement, options: PdfExportOptions 
       monitor,
       options.fontLoadTimeout ?? 30000,
       options.fontFallback ?? true,
+      options.basePath ?? '/',
     )
 
     // 页面尺寸、边距、方向

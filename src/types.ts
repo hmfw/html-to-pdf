@@ -29,6 +29,27 @@ export interface PdfExportOptions {
     bold?: string
   }
   /**
+   * 部署基础路径（默认 `'/'`）。
+   *
+   * 用于解决应用**部署在子路径**（非域名根目录）时，内置思源黑体的默认路径
+   * `/fonts/<文件名>` 被解析到域名根而非应用根、导致字体 404 的问题。
+   *
+   * 传入应用的 base 后，默认字体路径会自动带上该前缀。它同时作用于：
+   * - 未指定 `fontPaths` 时加载的默认主字体；
+   * - 使用自定义字体时、按需加载的思源黑体**后备字体**。
+   *
+   * 显式提供的 `fontPaths` 是完整 URL，不受 `basePath` 影响。
+   *
+   * @example
+   * ```typescript
+   * // Vite：根目录部署时为 '/'，子路径部署（base: '/myapp/'）时为 '/myapp/'
+   * { basePath: import.meta.env.BASE_URL }
+   * // Webpack（CRA/Vue CLI）
+   * { basePath: process.env.PUBLIC_URL }
+   * ```
+   */
+  basePath?: string
+  /**
    * 使用自定义字体时，是否在检测到缺字时加载思源黑体作为后备字体（默认 true）。
    *
    * 后备字体用于渲染自定义字体中缺失的字符（如繁体字体缺少的简体字）。

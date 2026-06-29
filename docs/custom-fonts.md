@@ -62,6 +62,20 @@ await htmlToPdf(element, {
 
 ### 部署在子目录
 
+应用部署在子路径（非域名根目录，如 `https://example.com/app/`）时，内置思源黑体的默认路径 `/fonts/...` 会被解析到**域名根**而非应用根，导致字体 404。
+
+推荐用 `basePath` 选项一处解决，它会自动为默认主字体和按需加载的后备字体都带上前缀：
+
+```typescript
+// 无需自定义字体，仅传入部署 base 即可
+await htmlToPdf(element, {
+  basePath: import.meta.env.BASE_URL, // Vite：根目录为 '/'，子路径（base: '/app/'）为 '/app/'
+  // Webpack（CRA/Vue CLI）用 process.env.PUBLIC_URL
+})
+```
+
+或仍可用 `fontPaths` 手动拼出完整路径（`fontPaths` 是完整 URL，不受 `basePath` 影响）：
+
 ```typescript
 // 应用部署在 /app/ 子目录
 await htmlToPdf(element, {

@@ -20,10 +20,17 @@ export type FontWeight = keyof typeof FONT_FILES
 
 /**
  * 为某个字重生成约定路径。
+ *
+ * @param weight 字重
+ * @param basePath 部署基础路径（默认 `/`）。子路径部署时传入应用的 base
+ *   （如 Vite 的 `import.meta.env.BASE_URL`），让默认字体路径自动带上前缀，
+ *   避免根绝对路径 `/fonts/` 在子目录部署下解析到错误位置而 404。
  */
-function buildDefaultUrl(weight: FontWeight): string {
+function buildDefaultUrl(weight: FontWeight, basePath: string = '/'): string {
   const file = FONT_FILES[weight]
-  return `/fonts/${file}`
+  // 归一化：确保以 / 结尾，避免 '/myapp' + 'fonts' 粘成 '/myappfonts'
+  const base = basePath.endsWith('/') ? basePath : `${basePath}/`
+  return `${base}fonts/${file}`
 }
 
 /** 带超时的 fetch，返回 ArrayBuffer */
@@ -73,14 +80,17 @@ function assertLooksLikeFont(buf: ArrayBuffer, url: string): void {
  * @param weight 字重
  * @param customUrl 用户自定义路径；提供时只尝试它，失败直接抛错（不静默换字体）
  * @param timeout 超时时间（毫秒），默认 30000（30 秒）
+ * @param basePath 部署基础路径（默认 `/`）。仅在未提供 customUrl、回退到约定路径
+ *   `/fonts/` 时生效；子路径部署时传入应用 base 使默认字体路径自动带上前缀。
  * @returns 字体文件的 ArrayBuffer
  */
 export async function loadFontWithFallback(
   weight: FontWeight,
   customUrl?: string,
   timeout: number = 30000,
+  basePath: string = '/',
 ): Promise<ArrayBuffer> {
-  const url = customUrl || buildDefaultUrl(weight)
+  const url = customUrl || buildDefaultUrl(weight, basePath)
 
   try {
     return await fetchArrayBuffer(url, timeout)
@@ -89,6 +99,7 @@ export async function loadFontWithFallback(
       ? `字体加载失败（${weight}）：\n${url} → ${(err as Error).message}`
       : `字体加载失败（${weight}）：\n${url} → ${(err as Error).message}\n\n` +
         `请确保字体文件已放置在应用的 public/fonts/ 目录，或通过 options.fontPaths.${weight} 指定可访问的 URL。\n` +
+        `若应用部署在子路径下（非根目录），请通过 options.basePath 传入部署基础路径（如 Vite 的 import.meta.env.BASE_URL）。\n` +
         `需要的字体文件可从 node_modules/@hmfw/html-to-pdf/public/fonts/ 复制。`
 
     throw new Error(errorMsg)
