@@ -5,15 +5,31 @@ import {
   detectImageFormat,
   tryEChartsHighRes,
   canvasSourceToArrayBuffer,
+  imageElementToArrayBuffer,
+  svgElementToArrayBuffer,
 } from '../imageHelper.js'
 import type { RenderContext, ResolvedBox } from './context.js'
 import { pushRoundedRectClip } from './geometry.js'
 
-/** 加载并嵌入 <img> 为 PDFImage（按格式选择 png/jpg） */
+/** 加载并嵌入 <img> 为 PDFImage（按格式选择 png/jpg，SVG 转换为 PNG） */
 export async function embedImageElement(ctx: RenderContext, img: HTMLImageElement): Promise<PDFImage> {
-  const imageData = await loadImageAsArrayBuffer(img.src)
   const format = detectImageFormat(img.src)
+
+  // SVG 需要先渲染到 canvas 再转 PNG
+  if (format === 'svg') {
+    const imageData = await imageElementToArrayBuffer(img)
+    return ctx.pdfDoc.embedPng(imageData)
+  }
+
+  // PNG/JPG 直接加载
+  const imageData = await loadImageAsArrayBuffer(img.src)
   if (format === 'jpg') return ctx.pdfDoc.embedJpg(imageData)
+  return ctx.pdfDoc.embedPng(imageData)
+}
+
+/** 嵌入 <svg> 元素为 PDFImage（转换为 PNG） */
+export async function embedSvgElement(ctx: RenderContext, svg: SVGSVGElement): Promise<PDFImage> {
+  const imageData = await svgElementToArrayBuffer(svg)
   return ctx.pdfDoc.embedPng(imageData)
 }
 

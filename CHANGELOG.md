@@ -5,6 +5,16 @@
 格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [1.0.3] - 2026-06-29
+
+### Added
+
+- **SVG 支持**：支持 `<img src="xxx.svg">` 和内联 `<svg>` 元素，自动转换为 PNG 后嵌入 PDF。
+
+### Fixed
+
+- 修复 SVG 图片导出错误："The input is not a PNG file!" —— 现在 SVG 会先转换为 PNG 再嵌入。
+
 ## [1.0.2] - 2026-06-29
 
 ### Added

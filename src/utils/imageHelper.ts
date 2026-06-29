@@ -103,7 +103,7 @@ export function canvasSourceToArrayBuffer(source: string | ArrayBuffer): ArrayBu
 /**
  * 检测图片格式
  */
-export function detectImageFormat(src: string): 'png' | 'jpg' | 'unknown' {
+export function detectImageFormat(src: string): 'png' | 'jpg' | 'svg' | 'unknown' {
   const lower = src.toLowerCase()
   if (lower.includes('data:image/png') || lower.endsWith('.png')) {
     return 'png'
@@ -112,5 +112,73 @@ export function detectImageFormat(src: string): 'png' | 'jpg' | 'unknown' {
       lower.endsWith('.jpg') || lower.endsWith('.jpeg')) {
     return 'jpg'
   }
+  if (lower.includes('data:image/svg+xml') || lower.endsWith('.svg')) {
+    return 'svg'
+  }
   return 'unknown'
+}
+
+/**
+ * 将 <img> 元素转换为 PNG ArrayBuffer。
+ * 用于 SVG 等需要栅格化的格式。
+ */
+export async function imageElementToArrayBuffer(img: HTMLImageElement): Promise<ArrayBuffer> {
+  const canvas = document.createElement('canvas')
+  const ctx = canvas.getContext('2d')
+  if (!ctx) {
+    throw new Error('Failed to get 2D context')
+  }
+
+  // 设置 canvas 尺寸为图片的自然尺寸
+  canvas.width = img.naturalWidth || img.width
+  canvas.height = img.naturalHeight || img.height
+
+  // 绘制图片到 canvas
+  ctx.drawImage(img, 0, 0)
+
+  // 转换为 PNG
+  return canvasToArrayBuffer(canvas)
+}
+
+/**
+ * 将 <svg> 元素转换为 PNG ArrayBuffer。
+ * 通过将 SVG 序列化为 data URL，再用 Image 加载后绘制到 canvas。
+ */
+export async function svgElementToArrayBuffer(svg: SVGSVGElement): Promise<ArrayBuffer> {
+  // 获取 SVG 的尺寸
+  const rect = svg.getBoundingClientRect()
+  const width = rect.width || 100
+  const height = rect.height || 100
+
+  // 将 SVG 序列化为字符串
+  const serializer = new XMLSerializer()
+  const svgString = serializer.serializeToString(svg)
+
+  // 创建 data URL
+  const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' })
+  const url = URL.createObjectURL(svgBlob)
+
+  try {
+    // 加载到 Image
+    const img = new Image()
+    await new Promise<void>((resolve, reject) => {
+      img.onload = () => resolve()
+      img.onerror = () => reject(new Error('Failed to load SVG as image'))
+      img.src = url
+    })
+
+    // 绘制到 canvas
+    const canvas = document.createElement('canvas')
+    canvas.width = width
+    canvas.height = height
+    const ctx = canvas.getContext('2d')
+    if (!ctx) {
+      throw new Error('Failed to get 2D context')
+    }
+    ctx.drawImage(img, 0, 0, width, height)
+
+    return canvasToArrayBuffer(canvas)
+  } finally {
+    URL.revokeObjectURL(url)
+  }
 }

@@ -1,7 +1,7 @@
 import { drawElementFill, drawElementBorders, drawPseudoElement } from './render/box.js'
 import { resolveBox, getBorderRadiusPt, insetToContentBox } from './render/geometry.js'
 import { renderTextNode } from './render/text.js'
-import { embedImageElement, embedCanvasElement, renderImage } from './render/image.js'
+import { embedImageElement, embedCanvasElement, renderImage, embedSvgElement } from './render/image.js'
 import { drawListMarker } from './render/list.js'
 import type { RenderContext } from './render/context.js'
 
@@ -57,9 +57,16 @@ async function drawBoxLayer(ctx: RenderContext, element: HTMLElement): Promise<v
       return
     }
 
+    if (tagName === 'svg') {
+      const { box: contentBox, radius } = insetToContentBox(element, box, getBorderRadiusPt(element))
+      await renderImage(ctx, contentBox, radius, () => embedSvgElement(ctx, element as unknown as SVGSVGElement))
+      drawPseudoElement(ctx, element, '::before')
+      return
+    }
+
     // 4. 绘制 ::before 伪元素（在背景和边框之上，子元素之下）
     drawPseudoElement(ctx, element, '::before')
-  } else if (tagName === 'img' || tagName === 'canvas') {
+  } else if (tagName === 'img' || tagName === 'canvas' || tagName === 'svg') {
     // 零尺寸的图片类元素无可渲染区域，直接跳过
     return
   }
@@ -133,8 +140,8 @@ function drawTextLayer(ctx: RenderContext, element: HTMLElement): void {
   if (styles.display === 'none' || styles.visibility === 'hidden') return
 
   const tagName = element.tagName.toLowerCase()
-  // 图片/canvas 无文字内容，跳过
-  if (tagName === 'img' || tagName === 'canvas') return
+  // 图片/canvas/svg 无文字内容，跳过
+  if (tagName === 'img' || tagName === 'canvas' || tagName === 'svg') return
 
   // 列表项：在文字之前绘制 marker（•、1. 等）
   if (tagName === 'li') {

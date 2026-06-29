@@ -311,7 +311,7 @@ await htmlToPdf(element, {
 | 文本 | 中英文混排、字号、颜色（hex / rgb / rgba） |
 | 字重 | Regular / Bold（`font-weight` ≥ 600 使用 Bold 字体） |
 | 斜体 | `italic` / `oblique`（通过 skew 变换模拟，无内嵌斜体字体） |
-| 图片 | `<img>`（PNG / JPG，支持 data URL）、`<canvas>`（转 PNG 嵌入） |
+| 图片 | `<img>`（PNG / JPG / **SVG**，支持 data URL）、`<canvas>`（转 PNG 嵌入）、内联 `<svg>` |
 | 盒子样式 | 背景色、透明度、边框（逐边）、圆角 |
 | 伪元素 | `::before` / `::after`（仅背景色和边框，需明确尺寸，[详见文档](docs/pseudo-elements.md)） |
 | 结构 | 表格、列表、引用、`<pre>`/`<code>`（保留换行） |
