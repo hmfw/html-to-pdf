@@ -88,9 +88,9 @@ await htmlToPdf(element, {
 })
 ```
 
-**后备字体机制**：当使用自定义字体时，库会自动尝试加载思源黑体作为后备字体。如果自定义字体缺少某些字符，这些字符会自动使用后备字体渲染，避免显示方块。
+**后备字体机制**：当使用自定义字体时，库会扫描内容并**按需加载**思源黑体作为后备字体——只有检测到自定义字体缺字时才会下载思源黑体补充，避免缺字显示为方块。自定义字体完整覆盖所用字符时，不会产生额外的字体请求。
 
-如果你的自定义字体已包含所有需要的字符，可以禁用后备字体以加快加载速度：
+如果你确定不需要后备字体（或想彻底避免任何后备字体请求），可以关闭它：
 
 ```ts
 await htmlToPdf(element, {
@@ -98,7 +98,7 @@ await htmlToPdf(element, {
     regular: '/fonts/MyFont-Regular.otf',
     bold: '/fonts/MyFont-Bold.otf',
   },
-  fontFallback: false,  // 禁用后备字体
+  fontFallback: false,  // 关闭后备字体：缺字直接显示为方块
 })
 ```
 
@@ -297,7 +297,7 @@ await htmlToPdf(element, { fontSubset: false })
     regular?: string                                  // Regular 字体 URL，默认 '/fonts/Source_Han_Sans_SC_Regular.otf'
     bold?: string                                     // Bold 字体 URL，默认 '/fonts/Source_Han_Sans_SC_Bold.otf'
   }
-  fontFallback?: boolean                              // 使用自定义字体时是否启用后备字体（思源黑体），默认 true
+  fontFallback?: boolean                              // 使用自定义字体时，检测到缺字才按需加载后备字体（思源黑体），默认 true
   fontSubset?: boolean                                // 是否子集化字体，默认 true（false 嵌入完整字体，文件显著增大）
   fontLoadTimeout?: number                            // 字体加载超时（毫秒），默认 30000（30 秒）。网络较慢时建议 45000-60000
   canvasResolver?: (canvas) => string | ArrayBuffer | null // 自定义 canvas 图片来源（高清图表用），返回 data URL/ArrayBuffer，null 走默认逻辑

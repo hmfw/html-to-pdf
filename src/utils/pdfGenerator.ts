@@ -215,31 +215,35 @@ async function embedChineseFonts(
   ])
   monitor.mark('加载主字体')
 
-  // 如果使用了自定义字体且启用后备字体，加载思源黑体作为后备
-  let fallbackRegularBuf: ArrayBuffer | undefined
-  let fallbackBoldBuf: ArrayBuffer | undefined
-  if (hasCustomFont && enableFallback) {
-    ;[fallbackRegularBuf, fallbackBoldBuf] = await Promise.all([
-      loadFontWithFallback('regular', undefined, timeout).catch((err) => {
-        console.warn('[html-to-pdf] 后备字体 Regular 加载失败:', err)
-        return undefined
-      }),
-      loadFontWithFallback('bold', undefined, timeout).catch((err) => {
-        console.warn('[html-to-pdf] 后备字体 Bold 加载失败:', err)
-        return undefined
-      }),
-    ])
-    monitor.mark('加载后备字体（思源黑体）')
-  }
+  // 后备字体（思源黑体）惰性加载器：仅在使用自定义字体且启用后备时可用。
+  // 子集化路径下，只有真正检测到缺字才会调用它去下载，自定义字体完整时零额外流量。
+  const loadFallback =
+    hasCustomFont && enableFallback
+      ? async () => {
+          const [regular, bold] = await Promise.all([
+            loadFontWithFallback('regular', undefined, timeout).catch((err) => {
+              console.warn('[html-to-pdf] 后备字体 Regular 加载失败:', err)
+              return undefined
+            }),
+            loadFontWithFallback('bold', undefined, timeout).catch((err) => {
+              console.warn('[html-to-pdf] 后备字体 Bold 加载失败:', err)
+              return undefined
+            }),
+          ])
+          monitor.mark('加载后备字体（思源黑体）')
+          return { regular, bold }
+        }
+      : undefined
 
-  // 不子集化：直接嵌入完整字体文件
+  // 不子集化：无法预知缺字，若需后备则只能预先加载完整后备字体一并嵌入。
   if (!subset) {
+    const fallback = loadFallback ? await loadFallback() : { regular: undefined, bold: undefined }
     const regular = await pdfDoc.embedFont(regularBuf, { subset: false })
     const bold = boldBuf ? await pdfDoc.embedFont(boldBuf, { subset: false }) : undefined
-    const fallbackRegular = fallbackRegularBuf
-      ? await pdfDoc.embedFont(fallbackRegularBuf, { subset: false })
+    const fallbackRegular = fallback.regular
+      ? await pdfDoc.embedFont(fallback.regular, { subset: false })
       : undefined
-    const fallbackBold = fallbackBoldBuf ? await pdfDoc.embedFont(fallbackBoldBuf, { subset: false }) : undefined
+    const fallbackBold = fallback.bold ? await pdfDoc.embedFont(fallback.bold, { subset: false }) : undefined
     monitor.mark('嵌入完整字体')
 
     return { regular, bold, fallbackRegular, fallbackBold }
@@ -248,8 +252,7 @@ async function embedChineseFonts(
   const subsets = await createFontSubsetsForElement(element, {
     regular: regularBuf,
     bold: boldBuf,
-    fallbackRegular: fallbackRegularBuf,
-    fallbackBold: fallbackBoldBuf,
+    loadFallback,
   })
   monitor.mark('创建字体子集')
 

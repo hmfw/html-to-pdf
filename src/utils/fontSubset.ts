@@ -126,7 +126,9 @@ export async function createFontSubset(
  * 为 HTML 元素创建字体子集映射
  *
  * @param element 待扫描的元素
- * @param fontBuffers 各字重已加载的完整字体 ArrayBuffer（加载/降级见 fontLoader）
+ * @param fontBuffers 各字重已加载的完整字体 ArrayBuffer（加载/降级见 fontLoader）。
+ *   后备字体改为惰性加载器 `loadFallback`：仅当检测到主字体缺字时才调用，
+ *   实现按需加载——自定义字体完整覆盖所用字符时，根本不会下载后备字体。
  */
 export async function createFontSubsetsForElement(
   element: HTMLElement,
@@ -134,8 +136,8 @@ export async function createFontSubsetsForElement(
     regular?: ArrayBuffer
     bold?: ArrayBuffer
     medium?: ArrayBuffer
-    fallbackRegular?: ArrayBuffer
-    fallbackBold?: ArrayBuffer
+    /** 惰性加载后备字体（思源黑体）。仅在主字体缺字时调用一次。 */
+    loadFallback?: () => Promise<{ regular?: ArrayBuffer; bold?: ArrayBuffer }>
   }
 ): Promise<{
   regular?: ArrayBuffer
@@ -201,30 +203,35 @@ export async function createFontSubsetsForElement(
 
   await Promise.all(tasks)
 
-  // 如果主字体有缺失字符且提供了后备字体，为后备字体创建子集（只包含缺失的字符）
-  if (missingInPrimary.size > 0 && fontBuffers.fallbackRegular) {
+  // 主字体有缺失字符且提供了后备字体加载器时，才下载后备字体并子集化（只含缺失字符）。
+  // 这是按需加载：自定义字体完整时不会触发下载，节省一次 16-17MB 的字体请求。
+  if (missingInPrimary.size > 0 && fontBuffers.loadFallback) {
     console.info(
-      `[html-to-pdf] 主字体缺少 ${missingInPrimary.size} 个字符，使用后备字体（思源黑体）补充`
+      `[html-to-pdf] 主字体缺少 ${missingInPrimary.size} 个字符，加载后备字体（思源黑体）补充`
     )
 
     // 保存缺失字符集合，供渲染时判断使用
     subsets.missingChars = missingInPrimary
 
+    const fallback = await fontBuffers.loadFallback()
+
     const fallbackTasks: Promise<void>[] = []
 
-    fallbackTasks.push(
-      createFontSubset(fontBuffers.fallbackRegular, missingInPrimary, false)
-        .then(({ buffer }) => {
-          subsets.fallbackRegular = buffer
-        })
-        .catch((err) => {
-          console.warn('后备字体 Regular 子集创建失败:', err)
-        })
-    )
-
-    if (fontBuffers.fallbackBold) {
+    if (fallback.regular) {
       fallbackTasks.push(
-        createFontSubset(fontBuffers.fallbackBold, missingInPrimary, false)
+        createFontSubset(fallback.regular, missingInPrimary, false)
+          .then(({ buffer }) => {
+            subsets.fallbackRegular = buffer
+          })
+          .catch((err) => {
+            console.warn('后备字体 Regular 子集创建失败:', err)
+          })
+      )
+    }
+
+    if (fallback.bold) {
+      fallbackTasks.push(
+        createFontSubset(fallback.bold, missingInPrimary, false)
           .then(({ buffer }) => {
             subsets.fallbackBold = buffer
           })

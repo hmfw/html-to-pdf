@@ -185,7 +185,7 @@ Angular、Svelte、Solid 等同理：拿到模板中的 DOM 元素引用（`@Vie
   pageSize?: 'A4' | 'A3' | 'Letter'                   // 或自定义 { width, height }（单位 pt），默认 'A4'
   orientation?: 'portrait' | 'landscape'              // 页面方向，默认 'portrait'
   fontPaths?: { regular?, bold? }                     // 自定义字体路径（可选）
-  fontFallback?: boolean                              // 使用自定义字体时是否启用后备字体（思源黑体），默认 true
+  fontFallback?: boolean                              // 使用自定义字体时，检测到缺字才按需加载后备字体（思源黑体），默认 true
   fontSubset?: boolean                                // 是否子集化字体，默认 true
   fontLoadTimeout?: number                            // 字体加载超时（毫秒），默认 30000（30 秒）。网络较慢时建议 45000-60000
   canvasResolver?: (canvas) => string | ArrayBuffer | null // 自定义 canvas 图片来源（高清图表），null 走默认逻辑
