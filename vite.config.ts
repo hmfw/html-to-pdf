@@ -3,43 +3,11 @@ import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import { resolve } from 'path'
 import { fileURLToPath } from 'url'
-import { copyFileSync, mkdirSync, existsSync } from 'fs'
 import { createRequire } from 'module'
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url))
 const require = createRequire(import.meta.url)
 const pkg = require('./package.json')
-
-/** 随包发布的字体文件名（与 src/utils/fontLoader.ts 的 FONT_FILES 保持一致） */
-const FONT_FILES = [
-  'Source_Han_Sans_SC_Regular.otf',
-  'Source_Han_Sans_SC_Bold.otf',
-]
-
-/**
- * 构建后将 public/fonts 复制到 dist/fonts，使字体随 npm 包发布，
- * 供 npmmirror / jsDelivr / unpkg 等 CDN 按版本号镜像。
- */
-function copyFontsPlugin() {
-  return {
-    name: 'copy-fonts',
-    closeBundle() {
-      const srcDir = resolve(__dirname, 'public/fonts')
-      const destDir = resolve(__dirname, 'dist/fonts')
-      if (!existsSync(destDir)) {
-        mkdirSync(destDir, { recursive: true })
-      }
-      for (const file of FONT_FILES) {
-        const src = resolve(srcDir, file)
-        if (!existsSync(src)) {
-          throw new Error(`[copy-fonts] 缺少字体文件: ${src}`)
-        }
-        copyFileSync(src, resolve(destDir, file))
-      }
-      console.log(`✓ 已复制 ${FONT_FILES.length} 个字体文件到 dist/fonts/`)
-    },
-  }
-}
 
 // https://vitejs.dev/config/
 export default defineConfig(({ command }) => {
@@ -58,8 +26,7 @@ export default defineConfig(({ command }) => {
     // 构建库：纯工具函数，不依赖框架
     return {
       define,
-      // 关闭 publicDir 自动拷贝：public/fonts 里含 Medium/Normal 等仅供网页预览的字重，
-      // 不应进入 npm 包。改由 copyFontsPlugin 精确复制 PDF 实际使用的 Regular/Bold。
+      // 关闭 publicDir 自动拷贝：public/fonts 仅供开发时预览，不随 npm 包发布
       publicDir: false,
       build: {
         lib: {
@@ -73,7 +40,6 @@ export default defineConfig(({ command }) => {
           external: ['@pdfme/pdf-lib', 'fontkit', 'opentype.js']
         }
       },
-      plugins: [copyFontsPlugin()],
       test,
     }
   } else {

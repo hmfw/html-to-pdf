@@ -193,7 +193,13 @@ async function embedChineseFonts(
   customFontPaths: PdfExportOptions['fontPaths'],
   subset: boolean,
   monitor: PerformanceMonitor,
-): Promise<{ regular: PDFFont; bold?: PDFFont; fallbackRegular?: PDFFont; fallbackBold?: PDFFont }> {
+): Promise<{
+  regular: PDFFont
+  bold?: PDFFont
+  fallbackRegular?: PDFFont
+  fallbackBold?: PDFFont
+  missingChars?: Set<string>
+}> {
   // 判断是否使用自定义字体
   const hasCustomFont = !!(customFontPaths?.regular || customFontPaths?.bold)
 
@@ -255,7 +261,7 @@ async function embedChineseFonts(
   const fallbackBold = subsets.fallbackBold ? await pdfDoc.embedFont(subsets.fallbackBold) : undefined
   monitor.mark('嵌入子集字体')
 
-  return { regular, bold, fallbackRegular, fallbackBold }
+  return { regular, bold, fallbackRegular, fallbackBold, missingChars: subsets.missingChars }
 }
 
 /**
@@ -299,6 +305,7 @@ export async function htmlToPdf(element: HTMLElement, options: PdfExportOptions 
       chineseFontBold: chineseFonts.bold,
       fallbackFont: chineseFonts.fallbackRegular,
       fallbackFontBold: chineseFonts.fallbackBold,
+      missingChars: chineseFonts.missingChars,  // 新增：传递缺失字符集合
       containerRect,
       pageHeight: finalPageSize.height,
       pageWidth: finalPageSize.width,

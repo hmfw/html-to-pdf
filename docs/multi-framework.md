@@ -38,16 +38,22 @@ import { PDF_CONTAINER_ATTR, PDF_PAGE_ATTR } from '@hmfw/html-to-pdf'
 
 ## 字体
 
-字体加载与框架无关。思源黑体随 npm 包发布，运行时按「本地 `/fonts/` → npmmirror → jsDelivr → unpkg」自动降级加载，**默认无需配置**（可通过 `options.fontPaths` 覆盖）：
+字体加载与框架无关。**安装后需要手动配置字体路径**。
 
-- `Source_Han_Sans_SC_Regular.otf`（必需）
-- `Source_Han_Sans_SC_Bold.otf`（始终加载，失败时降级为无粗体）
+### 配置方法
 
-如需完全离线 / 内网部署，把 `dist/fonts/` 下这两个 `.otf` 放到应用静态资源目录，确保能通过 `/fonts/...` 访问即可命中第 1 步、不发起外部请求：
+从 `node_modules/@hmfw/html-to-pdf/public/fonts/` 复制字体到应用静态资源目录：
 
 - Vite / CRA：放到 `public/fonts/`
 - Next.js：放到 `public/fonts/`
 - Vue CLI：放到 `public/fonts/`
+
+确保以下文件可通过 `/fonts/` 路径访问：
+
+- `Source_Han_Sans_SC_Regular.otf`（必需）
+- `Source_Han_Sans_SC_Bold.otf`（必需）
+
+或通过 `options.fontPaths` 指定 CDN 或自定义路径。详见 [字体配置](../README.md#字体配置)。
 
 ## React
 

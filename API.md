@@ -38,10 +38,10 @@ interface PdfExportOptions {
   /** 页面方向，默认 'portrait' */
   orientation?: 'portrait' | 'landscape'
   
-  /** 自定义字体路径（可选，覆盖默认思源黑体） */
+  /** 自定义字体路径（可选，默认尝试 /fonts/ 路径） */
   fontPaths?: {
-    regular?: string
-    bold?: string
+    regular?: string  // 默认 '/fonts/Source_Han_Sans_SC_Regular.otf'
+    bold?: string     // 默认 '/fonts/Source_Han_Sans_SC_Bold.otf'
   }
   
   /** 是否子集化字体，默认 true。false 时嵌入完整字体（文件显著增大） */

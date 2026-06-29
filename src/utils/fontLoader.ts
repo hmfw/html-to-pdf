@@ -1,25 +1,14 @@
 /**
- * 字体多源降级加载器
+ * 字体加载器
  *
- * 默认思源黑体随 npm 包发布（构建时复制到 `dist/fonts/`，见 vite.config.ts），
- * 但浏览器运行时无法直接读取 node_modules 里的文件，必须通过 URL 加载。
- * 因此采用「本地约定路径 → 国内 CDN → 国际 CDN」的顺序逐个尝试，
- * 任一成功即返回，兼顾国内网络与离线/内网部署。
+ * 浏览器运行时无法直接读取 node_modules 里的文件，必须通过 HTTP URL 加载。
+ * 用户需在应用中托管字体文件（如放到 public/fonts/），或通过 fontPaths 选项
+ * 指定可访问的 URL（本地路径或 CDN）。
  *
  * 加载优先级：
  *   1. 用户自定义路径（customUrl）——命中即用，失败直接抛错，绝不静默换字体；
- *   2. `/fonts/<file>`——沿用 public 目录约定，应用自行托管时零网络请求；
- *   3. npmmirror（国内镜像，淘宝）；
- *   4. jsDelivr（国内有节点）；
- *   5. unpkg（国际兜底）。
+ *   2. `/fonts/<file>`——约定路径，用户需将字体文件放到应用的 public/fonts/ 目录。
  */
-
-/** 当前包版本，构建时由 vite 的 define 注入；开发态回退到 latest */
-declare const __PKG_VERSION__: string
-const PKG_VERSION: string = typeof __PKG_VERSION__ !== 'undefined' ? __PKG_VERSION__ : 'latest'
-
-/** npm 包名，用于拼接 CDN 路径 */
-const PKG_NAME = '@hmfw/html-to-pdf'
 
 /** 字体文件名（与 public/fonts、dist/fonts 保持一致） */
 export const FONT_FILES = {
@@ -30,22 +19,11 @@ export const FONT_FILES = {
 export type FontWeight = keyof typeof FONT_FILES
 
 /**
- * 为某个字重生成按优先级排序的候选 URL 列表。
- * 不含用户自定义路径（customUrl 单独优先处理）。
+ * 为某个字重生成约定路径。
  */
-function buildCandidateUrls(weight: FontWeight): string[] {
+function buildDefaultUrl(weight: FontWeight): string {
   const file = FONT_FILES[weight]
-  const v = PKG_VERSION
-  return [
-    // 应用自托管的本地约定路径（离线 / 内网首选）
-    `/fonts/${file}`,
-    // 国内镜像
-    `https://registry.npmmirror.com/${PKG_NAME}/${v}/files/dist/fonts/${file}`,
-    // jsDelivr（国内有 CDN 节点）
-    `https://cdn.jsdelivr.net/npm/${PKG_NAME}@${v}/dist/fonts/${file}`,
-    // 国际兜底
-    `https://unpkg.com/${PKG_NAME}@${v}/dist/fonts/${file}`,
-  ]
+  return `/fonts/${file}`
 }
 
 /** 带超时的 fetch，返回 ArrayBuffer */
@@ -60,6 +38,8 @@ async function fetchArrayBuffer(url: string, timeout: number): Promise<ArrayBuff
     const buf = await res.arrayBuffer()
     assertLooksLikeFont(buf, url)
     return buf
+  } catch (err) {
+    throw new Error(`加载失败: ${(err as Error).message}`)
   } finally {
     clearTimeout(timer)
   }
@@ -88,7 +68,7 @@ function assertLooksLikeFont(buf: ArrayBuffer, url: string): void {
 }
 
 /**
- * 加载指定字重的字体，按优先级在多个源之间自动降级。
+ * 加载指定字重的字体。
  *
  * @param weight 字重
  * @param customUrl 用户自定义路径；提供时只尝试它，失败直接抛错（不静默换字体）
@@ -98,27 +78,17 @@ export async function loadFontWithFallback(
   weight: FontWeight,
   customUrl?: string,
 ): Promise<ArrayBuffer> {
-  // 用户显式指定路径：只用它，失败即抛错，避免「换了字体却不自知」
-  if (customUrl) {
-    return fetchArrayBuffer(customUrl, 15000)
+  const url = customUrl || buildDefaultUrl(weight)
+
+  try {
+    return await fetchArrayBuffer(url, 15000)
+  } catch (err) {
+    const errorMsg = customUrl
+      ? `字体加载失败（${weight}）：\n${url} → ${(err as Error).message}`
+      : `字体加载失败（${weight}）：\n${url} → ${(err as Error).message}\n\n` +
+        `请确保字体文件已放置在应用的 public/fonts/ 目录，或通过 options.fontPaths.${weight} 指定可访问的 URL。\n` +
+        `需要的字体文件可从 node_modules/@hmfw/html-to-pdf/public/fonts/ 复制。`
+
+    throw new Error(errorMsg)
   }
-
-  const candidates = buildCandidateUrls(weight)
-  const errors: string[] = []
-
-  for (let i = 0; i < candidates.length; i++) {
-    const url = candidates[i]
-    // 本地约定路径给较短超时，CDN 给较长超时
-    const timeout = i === 0 ? 8000 : 15000
-    try {
-      return await fetchArrayBuffer(url, timeout)
-    } catch (err) {
-      errors.push(`${url} → ${(err as Error).message}`)
-    }
-  }
-
-  throw new Error(
-    `字体加载失败（${weight}），已尝试以下来源：\n${errors.join('\n')}\n` +
-      `可通过 options.fontPaths.${weight} 指定可用的字体地址。`,
-  )
 }

@@ -81,13 +81,13 @@ npm run test:watch     # 监听模式
 
 ## 字体
 
-- 运行时从 `public/fonts/` 加载，默认路径可通过 `options.fontPaths` 覆盖。
-- 默认路径定义在 `pdfGenerator.ts` 的 `DEFAULT_FONT_URLS`：
+- 运行时需从可访问的 URL 加载字体。用户需将 `public/fonts/` 中的字体文件复制到应用的静态资源目录，或通过 `options.fontPaths` 指定 CDN 等可访问路径。
+- 默认尝试从 `/fonts/` 路径加载（由 `fontLoader.ts` 的 `buildDefaultUrl` 定义）：
   - `Source_Han_Sans_SC_Regular.otf`（必需）
-  - `Source_Han_Sans_SC_Bold.otf`（始终加载）
+  - `Source_Han_Sans_SC_Bold.otf`（必需）
 - PDF 生成只用 Regular / Bold 两个字重；`src/styles/fonts.css` 里的其它字重仅供网页预览。
 - **字体子集化默认开启**，可通过 `options.fontSubset = false` 关闭（关闭时嵌入完整字体，文件显著增大）。emoji 等符号会被 `fontSubset.ts` 过滤掉。
-- 字体文件较大（每个约 16–17MB），已随仓库提交，克隆后即可使用。子集化后 PDF 文件仅包含实际使用的字符。
+- 字体文件较大（每个约 16–17MB），保存在 `public/fonts/`，仅供开发时使用和用户复制，**不随 npm 包发布**。子集化后 PDF 文件仅包含实际使用的字符。
 - 用户可通过 `options.fontPaths = { regular, bold }` 自定义字体路径（本地路径或 CDN URL），详见 `docs/custom-fonts.md`。
 
 ## 修改时的约定

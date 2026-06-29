@@ -143,6 +143,7 @@ export async function createFontSubsetsForElement(
   medium?: ArrayBuffer
   fallbackRegular?: ArrayBuffer
   fallbackBold?: ArrayBuffer
+  missingChars?: Set<string>  // 新增：主字体中缺失的字符集合
 }> {
   const characters = extractUsedCharacters(element)
 
@@ -152,6 +153,7 @@ export async function createFontSubsetsForElement(
     medium?: ArrayBuffer
     fallbackRegular?: ArrayBuffer
     fallbackBold?: ArrayBuffer
+    missingChars?: Set<string>
   } = {}
 
   // 并行创建所有字体子集
@@ -204,6 +206,9 @@ export async function createFontSubsetsForElement(
     console.info(
       `[html-to-pdf] 主字体缺少 ${missingInPrimary.size} 个字符，使用后备字体（思源黑体）补充`
     )
+
+    // 保存缺失字符集合，供渲染时判断使用
+    subsets.missingChars = missingInPrimary
 
     const fallbackTasks: Promise<void>[] = []
 

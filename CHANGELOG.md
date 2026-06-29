@@ -5,6 +5,24 @@
 格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [1.1.0] - 2026-06-29
+
+### Changed
+
+- **BREAKING**: 字体文件不再随 npm 包发布，需用户手动托管。将 `node_modules/@hmfw/html-to-pdf/public/fonts/` 中的字体复制到应用的 `public/fonts/` 目录，或通过 `options.fontPaths` 指定可访问路径。
+- **BREAKING**: 移除字体 CDN 降级加载机制。默认只从 `/fonts/` 路径加载，加载失败会直接报错并提示解决方法。
+- npm 包体积减小约 32-34MB（不再包含字体文件）。
+
+### Fixed
+
+- **修复后备字体渲染失效问题**：当使用自定义字体（如繁体字体）缺少某些字符时，即使加载了后备字体，渲染时仍使用主字体导致字符显示为方块。现在会逐字符判断，缺失字符自动使用后备字体渲染。
+- 改进后备字体错误提示：明确说明需要同时托管思源黑体才能让后备机制生效。
+
+### Added
+
+- 真正的混合字体渲染：`renderTextWithFallback` 函数按字符动态选择主字体或后备字体，将相邻使用相同字体的字符合并为段，优化性能。
+- 渲染上下文新增 `missingChars` 字段：记录主字体中缺失的字符集合，供渲染时判断。
+
 ## [1.0.3] - 2026-06-29
 
 ### Added

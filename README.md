@@ -42,20 +42,42 @@ pnpm add @hmfw/html-to-pdf
 
 ## 字体配置
 
-本库需要思源黑体文件才能正确渲染中文。字体随 npm 包一起发布（构建时复制到 `dist/fonts/`），**默认无需任何配置**。
+本库需要思源黑体文件才能正确渲染中文。**安装后需要手动配置字体路径**。
 
-运行时按以下顺序自动降级加载，兼顾国内网络与离线/内网部署，任一来源成功即停止：
+### 方法 1：托管字体文件（推荐）
 
-1. `/fonts/Source_Han_Sans_SC_Regular.otf`（应用自托管的本地路径，离线/内网首选）
-2. `https://registry.npmmirror.com/...`（国内镜像，淘宝）
-3. `https://cdn.jsdelivr.net/...`（jsDelivr，国内有节点）
-4. `https://unpkg.com/...`（国际兜底）
+从 `node_modules/@hmfw/html-to-pdf/public/fonts/` 复制字体到你的应用：
 
-> 想完全离线 / 内网部署：把 `dist/fonts/` 下的两个 otf 放到你站点的 `/fonts/` 目录即可命中第 1 步，不再发起任何外部请求。
+```bash
+# 手动复制
+cp node_modules/@hmfw/html-to-pdf/public/fonts/*.otf public/fonts/
+
+# 或在 package.json 添加安装后钩子
+{
+  "scripts": {
+    "postinstall": "mkdir -p public/fonts && cp node_modules/@hmfw/html-to-pdf/public/fonts/*.otf public/fonts/"
+  }
+}
+```
+
+确保字体可通过 `/fonts/Source_Han_Sans_SC_Regular.otf` 和 `/fonts/Source_Han_Sans_SC_Bold.otf` 访问。
+
+### 方法 2：使用 CDN 或自定义路径
+
+通过 `options.fontPaths` 指定字体 URL：
+
+```ts
+await htmlToPdf(element, {
+  fontPaths: {
+    regular: 'https://your-cdn.com/fonts/Source_Han_Sans_SC_Regular.otf',
+    bold: 'https://your-cdn.com/fonts/Source_Han_Sans_SC_Bold.otf',
+  },
+})
+```
 
 ### 自定义字体
 
-通过 `options.fontPaths` 指定自己的字体地址（本地路径或 CDN URL）。一旦指定，就只使用该地址，加载失败会直接报错，不会静默回退到思源黑体：
+你也可以使用自己的字体文件替代思源黑体：
 
 ```ts
 await htmlToPdf(element, {
@@ -66,7 +88,13 @@ await htmlToPdf(element, {
 })
 ```
 
-**后备字体机制**：当使用自定义字体时，库会自动加载思源黑体作为后备字体。如果自定义字体缺少某些字符，这些字符会自动使用后备字体渲染，避免显示方块。控制台会提示使用了后备字体的字符数量。
+**后备字体机制**：当使用自定义字体时，库会自动尝试加载思源黑体作为后备字体。如果自定义字体缺少某些字符，这些字符会自动使用后备字体渲染，避免显示方块。
+
+> ⚠️ **重要**：要使后备字体生效，你需要同时托管思源黑体文件。如果你使用的自定义字体（如繁体字体）缺少某些简体字，而又没有托管思源黑体，这些字符仍会显示为方块。
+>
+> 解决方法：
+> 1. 同时托管思源黑体到 `/fonts/` 目录，让后备机制生效
+> 2. 或使用包含所需全部字符的字体（如同时包含简繁体的 Noto Sans CJK）
 
 > 当前 PDF 生成只使用 Regular 和 Bold 两个字重。`src/styles/fonts.css` 中声明的其它字重仅用于网页预览。
 
@@ -154,7 +182,7 @@ function Report() {
 }
 ```
 
-> 字体仍需可访问 `/fonts/Source_Han_Sans_SC_*.otf`，与框架无关，详见 [字体配置](#字体配置)。
+> 字体需按上述方式配置后才能使用，与框架无关，详见 [字体配置](#字体配置)。
 
 ## 字体子集化说明
 

@@ -37,20 +37,23 @@ export function selectFont(ctx: RenderContext, fontWeight: string | number, char
   // 理由：库只有 Regular / Bold 两个字重，600+ 视觉上更接近粗体
   const isBold = weight >= 600
 
-  // 选择主字体
+  // 如果提供了字符且该字符在缺失列表中，使用后备字体
+  if (char && ctx.missingChars?.has(char)) {
+    const fallback = isBold
+      ? (ctx.fallbackFontBold ?? ctx.fallbackFont)
+      : ctx.fallbackFont
+
+    // 如果后备字体存在，使用后备字体；否则降级到主字体（会显示为方块）
+    if (fallback) {
+      return fallback
+    }
+  }
+
+  // 使用主字体
   const mainFont = isBold
     ? (ctx.chineseFontBold ?? ctx.chineseFont ?? ctx.latinFontBold)
     : (ctx.chineseFont ?? ctx.latinFont)
 
-  // 如果没有提供字符或没有后备字体，直接返回主字体
-  if (!char || !ctx.fallbackFont) {
-    return mainFont
-  }
-
-  // 检查字符是否在主字体中存在
-  // 注意：这里无法直接检查，因为 PDFFont 不暴露字形查询 API
-  // 作为简化方案，我们只在有后备字体时返回后备字体选择器
-  // 实际的字形查询在 drawText 时由 pdf-lib 处理
   return mainFont
 }
 
@@ -66,6 +69,62 @@ type DrawTextOptions = {
   italic: boolean
   maxWidth?: number
   lineHeight?: number
+}
+
+type RenderWithFallbackOptions = {
+  x: number
+  y: number
+  size: number
+  fontWeight: string | number
+  color: ReturnType<typeof rgb>
+  italic: boolean
+  lineHeight?: number
+  ctx: RenderContext
+}
+
+/**
+ * 渲染文本，根据每个字符是否在主字体中存在，动态选择主字体或后备字体。
+ * 将相邻使用相同字体的字符合并为段，减少 drawText 调用次数。
+ */
+function renderTextWithFallback(page: PDFPage, text: string, opts: RenderWithFallbackOptions): void {
+  const { x, y, size, fontWeight, color, italic, ctx } = opts
+
+  const chars = Array.from(text) // 处理代理对
+  let currentX = x
+  let segmentText = ''
+  let segmentFont: PDFFont | null = null
+
+  const flushSegment = () => {
+    if (segmentText && segmentFont) {
+      drawStyledText(page, segmentText, {
+        x: currentX,
+        y,
+        size,
+        font: segmentFont,
+        color,
+        italic,
+      })
+      // 计算当前段的宽度，更新 x 坐标
+      const segmentWidth = segmentFont.widthOfTextAtSize(segmentText, size)
+      currentX += segmentWidth
+      segmentText = ''
+    }
+  }
+
+  for (const char of chars) {
+    const font = selectFont(ctx, fontWeight, char)
+
+    // 如果字体改变，先绘制当前段，再开始新段
+    if (segmentFont && font !== segmentFont) {
+      flushSegment()
+    }
+
+    segmentFont = font
+    segmentText += char
+  }
+
+  // 绘制最后一段
+  flushSegment()
 }
 
 /**
@@ -187,6 +246,8 @@ function measureVisualLines(textNode: Text): MeasuredLine[] {
 
 /**
  * 渲染文本节点（基于 Range 精确定位）
+ *
+ * 如果存在后备字体且有缺失字符，会将文本拆分为不同字体段分别渲染。
  */
 export function renderTextNode(ctx: RenderContext, textNode: Text, parentElement: HTMLElement): void {
   const text = textNode.textContent?.trim()
@@ -206,10 +267,13 @@ export function renderTextNode(ctx: RenderContext, textNode: Text, parentElement
 
   const styles = window.getComputedStyle(parentElement)
   const fontSize = pxToPt(parseFloat(styles.fontSize)) // px → pt
-  const font = selectFont(ctx, styles.fontWeight)
+  const fontWeight = styles.fontWeight
   const color = parseColor(styles.color)
   // italic / oblique 都按斜体处理
   const italic = styles.fontStyle === 'italic' || styles.fontStyle.startsWith('oblique')
+
+  // 检查是否需要使用后备字体（有缺失字符且后备字体存在）
+  const needsFallback = !!(ctx.missingChars && ctx.missingChars.size > 0 && ctx.fallbackFont)
 
   // 检查是否在 <pre> 标签内（需要保留换行符）
   let isPreformatted = false
@@ -226,8 +290,9 @@ export function renderTextNode(ctx: RenderContext, textNode: Text, parentElement
   if (isPreformatted && text.includes('\n')) {
     const lines = textNode.textContent!.split('\n')
     const lineHeight = resolveLineHeight(styles, fontSize)
+    const defaultFont = selectFont(ctx, fontWeight)
     // 每行行盒高度即 lineHeight，基线据此居中定位
-    const firstBaseline = baselineFromTop(font, fontSize, lineHeight)
+    const firstBaseline = baselineFromTop(defaultFont, fontSize, lineHeight)
 
     lines.forEach((line, index) => {
       if (!line.trim()) return // 跳过空行
@@ -236,15 +301,30 @@ export function renderTextNode(ctx: RenderContext, textNode: Text, parentElement
       const lineY = ctx.pageHeight - pxToPt(rect.top - pageRect.top) - firstBaseline - index * lineHeight
 
       try {
-        drawStyledText(page, line, {
-          x: pxToPt(rect.left - ctx.containerRect.left),
-          y: lineY,
-          size: fontSize,
-          font,
-          color: rgb(color.r, color.g, color.b),
-          italic,
-          lineHeight,
-        })
+        if (needsFallback) {
+          // 需要后备字体：逐字符渲染
+          renderTextWithFallback(page, line, {
+            x: pxToPt(rect.left - ctx.containerRect.left),
+            y: lineY,
+            size: fontSize,
+            fontWeight,
+            color: rgb(color.r, color.g, color.b),
+            italic,
+            lineHeight,
+            ctx,
+          })
+        } else {
+          // 不需要后备字体：整行渲染
+          drawStyledText(page, line, {
+            x: pxToPt(rect.left - ctx.containerRect.left),
+            y: lineY,
+            size: fontSize,
+            font: defaultFont,
+            color: rgb(color.r, color.g, color.b),
+            italic,
+            lineHeight,
+          })
+        }
       } catch (error) {
         console.warn('Failed to draw text line:', line, error)
       }
@@ -254,22 +334,38 @@ export function renderTextNode(ctx: RenderContext, textNode: Text, parentElement
     // 不再交给 pdf-lib 自动换行（其宽度估算会导致中英文混排时换行点偏差、右侧溢出）。
     const lines = measureVisualLines(textNode)
     const lineHeight = resolveLineHeight(styles, fontSize)
+    const defaultFont = selectFont(ctx, fontWeight)
 
     for (const line of lines) {
       const x = pxToPt(line.left - ctx.containerRect.left)
       // 每行用自身实测行盒高度定位基线，首行不再被整段高度顶到中部
       const baselineY =
-        ctx.pageHeight - pxToPt(line.top - pageRect.top) - baselineFromTop(font, fontSize, pxToPt(line.height))
+        ctx.pageHeight - pxToPt(line.top - pageRect.top) - baselineFromTop(defaultFont, fontSize, pxToPt(line.height))
       try {
-        drawStyledText(page, line.text, {
-          x,
-          y: baselineY,
-          size: fontSize,
-          font,
-          color: rgb(color.r, color.g, color.b),
-          italic,
-          lineHeight,
-        })
+        if (needsFallback) {
+          // 需要后备字体：逐字符渲染
+          renderTextWithFallback(page, line.text, {
+            x,
+            y: baselineY,
+            size: fontSize,
+            fontWeight,
+            color: rgb(color.r, color.g, color.b),
+            italic,
+            lineHeight,
+            ctx,
+          })
+        } else {
+          // 不需要后备字体：整行渲染
+          drawStyledText(page, line.text, {
+            x,
+            y: baselineY,
+            size: fontSize,
+            font: defaultFont,
+            color: rgb(color.r, color.g, color.b),
+            italic,
+            lineHeight,
+          })
+        }
         // 文字装饰线（下划线 / 删除线 / 上划线），按行宽绘制
         drawTextDecoration(page, styles, {
           x,

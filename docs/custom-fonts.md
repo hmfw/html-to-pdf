@@ -2,21 +2,21 @@
 
 ## 问题背景
 
-默认情况下，库会自动加载随包发布的思源黑体，按以下顺序降级，**无需任何配置**：
+库需要字体文件才能渲染中文。**默认情况下，库会尝试从 `/fonts/` 路径加载思源黑体**：
 
 ```text
-1. /fonts/Source_Han_Sans_SC_*.otf        （应用自托管的本地路径）
-2. https://registry.npmmirror.com/...       （国内镜像）
-3. https://cdn.jsdelivr.net/...             （jsDelivr）
-4. https://unpkg.com/...                    （国际兜底）
+/fonts/Source_Han_Sans_SC_Regular.otf
+/fonts/Source_Han_Sans_SC_Bold.otf
 ```
 
-但以下场景仍需通过 `fontPaths` 自定义：
+**你需要将字体文件放到应用的 `public/fonts/` 目录**，或通过 `fontPaths` 选项指定其他路径。
+
+以下场景需要自定义字体路径：
 - 使用其他中文字体（如微软雅黑、阿里巴巴普惠体）
-- 字体托管在自有 CDN / 私有源
+- 字体托管在 CDN 或自定义路径
 - 应用部署在子目录，本地路径不是 `/fonts/`
 
-> 一旦显式提供某字重的 `fontPaths`，就只使用该地址，加载失败会直接报错，不会回退到思源黑体或上述 CDN。
+> 提供 `fontPaths` 后，只使用指定路径，加载失败会直接报错。
 
 ---
 
@@ -41,7 +41,7 @@ await htmlToPdf(element, {
 ### 只覆盖部分路径
 
 ```typescript
-// 只改 Regular；Bold 未指定，仍走默认的「本地 → CDN」降级加载
+// 只改 Regular；Bold 未指定，仍走默认的 /fonts/ 路径
 await htmlToPdf(element, {
   fontPaths: {
     regular: '/fonts/CustomFont-Regular.otf'
