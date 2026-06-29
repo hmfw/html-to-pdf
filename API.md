@@ -44,8 +44,48 @@ interface PdfExportOptions {
     bold?: string     // 默认 '/fonts/Source_Han_Sans_SC_Bold.otf'
   }
   
+  /**
+   * 使用自定义字体时，是否同时加载思源黑体作为后备字体（默认 true）
+   * 
+   * 后备字体用于渲染自定义字体中缺失的字符（如繁体字体缺少的简体字）。
+   * - true：缺失的字符会使用思源黑体渲染（需要托管思源黑体文件）
+   * - false：不加载后备字体，加快加载速度，但缺失的字符会显示为方块
+   * 
+   * 仅在提供了 fontPaths 时生效。
+   */
+  fontFallback?: boolean
+  
   /** 是否子集化字体，默认 true。false 时嵌入完整字体（文件显著增大） */
   fontSubset?: boolean
+  
+  /**
+   * 字体加载超时时间（毫秒），默认 30000（30 秒）
+   * 
+   * 字体文件较大（思源黑体约 16-17MB），在网络较慢时需要更长加载时间：
+   * - 桌面宽带用户：30000（30 秒）已足够
+   * - 移动网络用户：建议 45000-60000（45-60 秒）
+   */
+  fontLoadTimeout?: number
+  
+  /**
+   * 自定义 <canvas> 的图片数据来源（用于高清图表导出）
+   * 
+   * 返回 data URL 字符串或 ArrayBuffer（PNG/JPEG 数据）替换默认栅格，
+   * 返回 null/undefined 则回退到内部逻辑。
+   */
+  canvasResolver?: (canvas: HTMLCanvasElement) => 
+    string | ArrayBuffer | null | undefined | Promise<string | ArrayBuffer | null | undefined>
+  
+  /**
+   * 内部 ECharts 自动探测兜底时使用的像素比
+   * 默认 Math.max(2, devicePixelRatio)
+   */
+  canvasPixelRatio?: number
+  
+  /**
+   * 是否在控制台输出性能报告（默认 false）
+   */
+  debug?: boolean
 }
 ```
 

@@ -90,11 +90,24 @@ await htmlToPdf(element, {
 
 **后备字体机制**：当使用自定义字体时，库会自动尝试加载思源黑体作为后备字体。如果自定义字体缺少某些字符，这些字符会自动使用后备字体渲染，避免显示方块。
 
+如果你的自定义字体已包含所有需要的字符，可以禁用后备字体以加快加载速度：
+
+```ts
+await htmlToPdf(element, {
+  fontPaths: {
+    regular: '/fonts/MyFont-Regular.otf',
+    bold: '/fonts/MyFont-Bold.otf',
+  },
+  fontFallback: false,  // 禁用后备字体
+})
+```
+
 > ⚠️ **重要**：要使后备字体生效，你需要同时托管思源黑体文件。如果你使用的自定义字体（如繁体字体）缺少某些简体字，而又没有托管思源黑体，这些字符仍会显示为方块。
 >
 > 解决方法：
 > 1. 同时托管思源黑体到 `/fonts/` 目录，让后备机制生效
 > 2. 或使用包含所需全部字符的字体（如同时包含简繁体的 Noto Sans CJK）
+> 3. 或设置 `fontFallback: false` 并确保自定义字体包含所有需要的字符
 
 > 当前 PDF 生成只使用 Regular 和 Bold 两个字重。`src/styles/fonts.css` 中声明的其它字重仅用于网页预览。
 
@@ -233,6 +246,44 @@ await htmlToPdf(element, { fontSubset: false })
 - `PDF_CONTAINER_ATTR` = `'data-pdf'` — 标记导出根元素
 - `PDF_PAGE_ATTR` = `'data-pdf-page'` — 标记分页块
 
+### 容器宽度设置（推荐）
+
+为了确保内容正确适配 PDF 页面，建议设置 `data-pdf` 容器的宽度与目标 PDF 页面宽度一致。
+
+**常用页面尺寸对应的容器宽度**（基于 px → pt 换算比例 0.75）：
+
+| 页面尺寸 | PDF 宽度 (pt) | 推荐容器宽度 (px) | CSS 设置 |
+|---------|--------------|-----------------|---------|
+| A4 纵向 | 595.28 | 794 | `max-width: 794px` |
+| A4 横向 | 841.89 | 1123 | `max-width: 1123px` |
+| A3 纵向 | 841.89 | 1123 | `max-width: 1123px` |
+| Letter | 612 | 816 | `max-width: 816px` |
+
+**示例**：
+
+```css
+.pdf-document {
+  max-width: 794px;  /* A4 纸张宽度 */
+  margin: 0 auto;    /* 居中显示 */
+  padding: 40px;     /* 页边距（自动分页时生效） */
+  background: white;
+  box-sizing: border-box;
+}
+```
+
+```html
+<div data-pdf class="pdf-document">
+  <h1>标题</h1>
+  <p>内容会按 794px 宽度布局，导出后完美适配 A4 纸张</p>
+</div>
+```
+
+> **为什么需要设置宽度？**
+> - 库会读取元素的真实布局（`getBoundingClientRect`）并按 1:1 映射到 PDF 坐标
+> - 如果容器宽度过宽（如 1200px），内容会超出 A4 页面右侧边界被裁剪
+> - 如果容器宽度过窄，会浪费 PDF 页面空间
+> - 设置 `max-width` 而非 `width`，小屏幕设备上容器会自适应收缩
+
 ## 配置选项
 
 ### `PdfExportOptions`
@@ -246,7 +297,9 @@ await htmlToPdf(element, { fontSubset: false })
     regular?: string                                  // Regular 字体 URL，默认 '/fonts/Source_Han_Sans_SC_Regular.otf'
     bold?: string                                     // Bold 字体 URL，默认 '/fonts/Source_Han_Sans_SC_Bold.otf'
   }
+  fontFallback?: boolean                              // 使用自定义字体时是否启用后备字体（思源黑体），默认 true
   fontSubset?: boolean                                // 是否子集化字体，默认 true（false 嵌入完整字体，文件显著增大）
+  fontLoadTimeout?: number                            // 字体加载超时（毫秒），默认 30000（30 秒）。网络较慢时建议 45000-60000
   canvasResolver?: (canvas) => string | ArrayBuffer | null // 自定义 canvas 图片来源（高清图表用），返回 data URL/ArrayBuffer，null 走默认逻辑
   canvasPixelRatio?: number                           // ECharts 自动探测兜底的像素比，默认 Math.max(2, devicePixelRatio)
 }

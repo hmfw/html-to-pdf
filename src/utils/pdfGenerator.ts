@@ -193,6 +193,8 @@ async function embedChineseFonts(
   customFontPaths: PdfExportOptions['fontPaths'],
   subset: boolean,
   monitor: PerformanceMonitor,
+  timeout: number = 30000,
+  enableFallback: boolean = true,
 ): Promise<{
   regular: PDFFont
   bold?: PDFFont
@@ -205,24 +207,24 @@ async function embedChineseFonts(
 
   // 始终加载 Regular 和 Bold 两个字重。Regular 必需，Bold 失败时降级为无粗体。
   const [regularBuf, boldBuf] = await Promise.all([
-    loadFontWithFallback('regular', customFontPaths?.regular),
-    loadFontWithFallback('bold', customFontPaths?.bold).catch((err) => {
+    loadFontWithFallback('regular', customFontPaths?.regular, timeout),
+    loadFontWithFallback('bold', customFontPaths?.bold, timeout).catch((err) => {
       console.warn('[html-to-pdf] Bold 字重加载失败，将仅使用 Regular:', err)
       return undefined
     }),
   ])
   monitor.mark('加载主字体')
 
-  // 如果使用了自定义字体，同时加载思源黑体作为后备字体
+  // 如果使用了自定义字体且启用后备字体，加载思源黑体作为后备
   let fallbackRegularBuf: ArrayBuffer | undefined
   let fallbackBoldBuf: ArrayBuffer | undefined
-  if (hasCustomFont) {
+  if (hasCustomFont && enableFallback) {
     ;[fallbackRegularBuf, fallbackBoldBuf] = await Promise.all([
-      loadFontWithFallback('regular').catch((err) => {
+      loadFontWithFallback('regular', undefined, timeout).catch((err) => {
         console.warn('[html-to-pdf] 后备字体 Regular 加载失败:', err)
         return undefined
       }),
-      loadFontWithFallback('bold').catch((err) => {
+      loadFontWithFallback('bold', undefined, timeout).catch((err) => {
         console.warn('[html-to-pdf] 后备字体 Bold 加载失败:', err)
         return undefined
       }),
@@ -284,7 +286,15 @@ export async function htmlToPdf(element: HTMLElement, options: PdfExportOptions 
     monitor.mark('加载标准字体')
 
     const subset = options.fontSubset !== false
-    const chineseFonts = await embedChineseFonts(pdfDoc, element, options.fontPaths, subset, monitor)
+    const chineseFonts = await embedChineseFonts(
+      pdfDoc,
+      element,
+      options.fontPaths,
+      subset,
+      monitor,
+      options.fontLoadTimeout ?? 30000,
+      options.fontFallback ?? true,
+    )
 
     // 页面尺寸、边距、方向
     const pageSize = getPageSize(options.pageSize)

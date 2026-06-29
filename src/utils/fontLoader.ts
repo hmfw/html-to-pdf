@@ -72,16 +72,18 @@ function assertLooksLikeFont(buf: ArrayBuffer, url: string): void {
  *
  * @param weight 字重
  * @param customUrl 用户自定义路径；提供时只尝试它，失败直接抛错（不静默换字体）
+ * @param timeout 超时时间（毫秒），默认 30000（30 秒）
  * @returns 字体文件的 ArrayBuffer
  */
 export async function loadFontWithFallback(
   weight: FontWeight,
   customUrl?: string,
+  timeout: number = 30000,
 ): Promise<ArrayBuffer> {
   const url = customUrl || buildDefaultUrl(weight)
 
   try {
-    return await fetchArrayBuffer(url, 15000)
+    return await fetchArrayBuffer(url, timeout)
   } catch (err) {
     const errorMsg = customUrl
       ? `字体加载失败（${weight}）：\n${url} → ${(err as Error).message}`
