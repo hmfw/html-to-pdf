@@ -112,6 +112,7 @@
           <h3>图片</h3>
           <div class="image-container">
             <img :src="iconImage" alt="示例图片" class="demo-image" />
+            <img :src="iconSvg" >
           </div>
 
           <h3>Canvas 绘图</h3>
@@ -305,6 +306,7 @@
 import { ref, onMounted } from 'vue'
 import { htmlToPdf } from './index'
 import iconImage from './assets/icon_2.png'
+import iconSvg from './assets/icon-empty.svg'
 
 const demoCanvas = ref<HTMLCanvasElement | null>(null)
 const pdfContainer = ref<HTMLElement | null>(null)

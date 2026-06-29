@@ -193,8 +193,10 @@ async function embedChineseFonts(
   customFontPaths: PdfExportOptions['fontPaths'],
   subset: boolean,
   monitor: PerformanceMonitor,
-): Promise<{ regular: PDFFont; bold?: PDFFont }> {
-  // 统一通过 fontLoader 加载字体（多源降级，兼顾国内网络与离线/内网），
+): Promise<{ regular: PDFFont; bold?: PDFFont; fallbackRegular?: PDFFont; fallbackBold?: PDFFont }> {
+  // 判断是否使用自定义字体
+  const hasCustomFont = !!(customFontPaths?.regular || customFontPaths?.bold)
+
   // 始终加载 Regular 和 Bold 两个字重。Regular 必需，Bold 失败时降级为无粗体。
   const [regularBuf, boldBuf] = await Promise.all([
     loadFontWithFallback('regular', customFontPaths?.regular),
@@ -203,20 +205,43 @@ async function embedChineseFonts(
       return undefined
     }),
   ])
-  monitor.mark('加载字体')
+  monitor.mark('加载主字体')
+
+  // 如果使用了自定义字体，同时加载思源黑体作为后备字体
+  let fallbackRegularBuf: ArrayBuffer | undefined
+  let fallbackBoldBuf: ArrayBuffer | undefined
+  if (hasCustomFont) {
+    ;[fallbackRegularBuf, fallbackBoldBuf] = await Promise.all([
+      loadFontWithFallback('regular').catch((err) => {
+        console.warn('[html-to-pdf] 后备字体 Regular 加载失败:', err)
+        return undefined
+      }),
+      loadFontWithFallback('bold').catch((err) => {
+        console.warn('[html-to-pdf] 后备字体 Bold 加载失败:', err)
+        return undefined
+      }),
+    ])
+    monitor.mark('加载后备字体（思源黑体）')
+  }
 
   // 不子集化：直接嵌入完整字体文件
   if (!subset) {
     const regular = await pdfDoc.embedFont(regularBuf, { subset: false })
     const bold = boldBuf ? await pdfDoc.embedFont(boldBuf, { subset: false }) : undefined
+    const fallbackRegular = fallbackRegularBuf
+      ? await pdfDoc.embedFont(fallbackRegularBuf, { subset: false })
+      : undefined
+    const fallbackBold = fallbackBoldBuf ? await pdfDoc.embedFont(fallbackBoldBuf, { subset: false }) : undefined
     monitor.mark('嵌入完整字体')
 
-    return { regular, bold }
+    return { regular, bold, fallbackRegular, fallbackBold }
   }
 
   const subsets = await createFontSubsetsForElement(element, {
     regular: regularBuf,
     bold: boldBuf,
+    fallbackRegular: fallbackRegularBuf,
+    fallbackBold: fallbackBoldBuf,
   })
   monitor.mark('创建字体子集')
 
@@ -226,9 +251,11 @@ async function embedChineseFonts(
 
   const regular = await pdfDoc.embedFont(subsets.regular)
   const bold = subsets.bold ? await pdfDoc.embedFont(subsets.bold) : undefined
+  const fallbackRegular = subsets.fallbackRegular ? await pdfDoc.embedFont(subsets.fallbackRegular) : undefined
+  const fallbackBold = subsets.fallbackBold ? await pdfDoc.embedFont(subsets.fallbackBold) : undefined
   monitor.mark('嵌入子集字体')
 
-  return { regular, bold }
+  return { regular, bold, fallbackRegular, fallbackBold }
 }
 
 /**
@@ -270,6 +297,8 @@ export async function htmlToPdf(element: HTMLElement, options: PdfExportOptions 
       latinFontBold,
       chineseFont: chineseFonts.regular,
       chineseFontBold: chineseFonts.bold,
+      fallbackFont: chineseFonts.fallbackRegular,
+      fallbackFontBold: chineseFonts.fallbackBold,
       containerRect,
       pageHeight: finalPageSize.height,
       pageWidth: finalPageSize.width,

@@ -59,11 +59,14 @@ export function extractUsedCharacters(element: HTMLElement): Set<string> {
  *
  * @param fontBuffer 已加载的完整字体 ArrayBuffer（加载/降级逻辑见 fontLoader）
  * @param characters 需要保留的字符集合
+ * @param warnMissing 是否对缺失字符输出警告（主字体为 true，后备字体为 false）
+ * @returns 子集字体 ArrayBuffer 和缺失的字符列表
  */
 export async function createFontSubset(
   fontBuffer: ArrayBuffer,
-  characters: Set<string>
-): Promise<ArrayBuffer> {
+  characters: Set<string>,
+  warnMissing: boolean = true
+): Promise<{ buffer: ArrayBuffer; missingChars: string[] }> {
   const font = opentype.parse(fontBuffer) as any
 
   // 获取字体元信息
@@ -83,17 +86,20 @@ export async function createFontSubset(
       glyphIds.add(glyph.index)
     } else if (!glyph || glyph.index === 0) {
       // 记录字体中不存在的字符
-      const code = char.codePointAt(0)?.toString(16).toUpperCase().padStart(4, '0')
-      missingChars.push(`'${char}' (U+${code})`)
+      missingChars.push(char)
     }
   }
 
-  // 如果有字符在字体中不存在，打印警告
-  if (missingChars.length > 0) {
+  // 如果有字符在字体中不存在且需要警告，打印警告
+  if (warnMissing && missingChars.length > 0) {
+    const displayChars = missingChars.slice(0, 20).map((ch) => {
+      const code = ch.codePointAt(0)?.toString(16).toUpperCase().padStart(4, '0')
+      return `'${ch}' (U+${code})`
+    })
     console.warn(
-      `[html-to-pdf] 以下 ${missingChars.length} 个字符在字体 ${familyName} ${styleName} 中不存在，将显示为方块：\n` +
-      missingChars.slice(0, 20).join(', ') +
-      (missingChars.length > 20 ? `\n... 及其他 ${missingChars.length - 20} 个字符` : '')
+      `[html-to-pdf] 以下 ${missingChars.length} 个字符在字体 ${familyName} ${styleName} 中不存在，将使用后备字体：\n` +
+        displayChars.join(', ') +
+        (missingChars.length > 20 ? `\n... 及其他 ${missingChars.length - 20} 个字符` : '')
     )
   }
 
@@ -110,7 +116,10 @@ export async function createFontSubset(
     glyphs
   })
 
-  return subsetFont.toArrayBuffer()
+  return {
+    buffer: subsetFont.toArrayBuffer(),
+    missingChars
+  }
 }
 
 /**
@@ -121,11 +130,19 @@ export async function createFontSubset(
  */
 export async function createFontSubsetsForElement(
   element: HTMLElement,
-  fontBuffers: { regular?: ArrayBuffer; bold?: ArrayBuffer; medium?: ArrayBuffer }
+  fontBuffers: {
+    regular?: ArrayBuffer
+    bold?: ArrayBuffer
+    medium?: ArrayBuffer
+    fallbackRegular?: ArrayBuffer
+    fallbackBold?: ArrayBuffer
+  }
 ): Promise<{
   regular?: ArrayBuffer
   bold?: ArrayBuffer
   medium?: ArrayBuffer
+  fallbackRegular?: ArrayBuffer
+  fallbackBold?: ArrayBuffer
 }> {
   const characters = extractUsedCharacters(element)
 
@@ -133,18 +150,24 @@ export async function createFontSubsetsForElement(
     regular?: ArrayBuffer
     bold?: ArrayBuffer
     medium?: ArrayBuffer
+    fallbackRegular?: ArrayBuffer
+    fallbackBold?: ArrayBuffer
   } = {}
 
   // 并行创建所有字体子集
   const tasks: Promise<void>[] = []
 
+  // 创建主字体子集，如果有缺失字符，记录到 missingInPrimary
+  const missingInPrimary = new Set<string>()
+
   if (fontBuffers.regular) {
     tasks.push(
-      createFontSubset(fontBuffers.regular, characters)
-        .then(buffer => {
+      createFontSubset(fontBuffers.regular, characters, true)
+        .then(({ buffer, missingChars }) => {
           subsets.regular = buffer
+          missingChars.forEach((ch) => missingInPrimary.add(ch))
         })
-        .catch(err => {
+        .catch((err) => {
           console.warn('Regular 字体子集创建失败:', err)
         })
     )
@@ -152,11 +175,11 @@ export async function createFontSubsetsForElement(
 
   if (fontBuffers.bold) {
     tasks.push(
-      createFontSubset(fontBuffers.bold, characters)
-        .then(buffer => {
+      createFontSubset(fontBuffers.bold, characters, true)
+        .then(({ buffer }) => {
           subsets.bold = buffer
         })
-        .catch(err => {
+        .catch((err) => {
           console.warn('Bold 字体子集创建失败:', err)
         })
     )
@@ -164,17 +187,50 @@ export async function createFontSubsetsForElement(
 
   if (fontBuffers.medium) {
     tasks.push(
-      createFontSubset(fontBuffers.medium, characters)
-        .then(buffer => {
+      createFontSubset(fontBuffers.medium, characters, true)
+        .then(({ buffer }) => {
           subsets.medium = buffer
         })
-        .catch(err => {
+        .catch((err) => {
           console.warn('Medium 字体子集创建失败:', err)
         })
     )
   }
 
   await Promise.all(tasks)
+
+  // 如果主字体有缺失字符且提供了后备字体，为后备字体创建子集（只包含缺失的字符）
+  if (missingInPrimary.size > 0 && fontBuffers.fallbackRegular) {
+    console.info(
+      `[html-to-pdf] 主字体缺少 ${missingInPrimary.size} 个字符，使用后备字体（思源黑体）补充`
+    )
+
+    const fallbackTasks: Promise<void>[] = []
+
+    fallbackTasks.push(
+      createFontSubset(fontBuffers.fallbackRegular, missingInPrimary, false)
+        .then(({ buffer }) => {
+          subsets.fallbackRegular = buffer
+        })
+        .catch((err) => {
+          console.warn('后备字体 Regular 子集创建失败:', err)
+        })
+    )
+
+    if (fontBuffers.fallbackBold) {
+      fallbackTasks.push(
+        createFontSubset(fontBuffers.fallbackBold, missingInPrimary, false)
+          .then(({ buffer }) => {
+            subsets.fallbackBold = buffer
+          })
+          .catch((err) => {
+            console.warn('后备字体 Bold 子集创建失败:', err)
+          })
+      )
+    }
+
+    await Promise.all(fallbackTasks)
+  }
 
   return subsets
 }

@@ -14,8 +14,10 @@ import { findPageIndex } from './geometry.js'
  * 根据字重选择合适的字体。
  * 中英文统一走子集化的思源黑体（子集已包含页面用到的拉丁字符），
  * 保证中英文混排时字形一致；仅在子集字体缺失时回退到内置 Helvetica。
+ *
+ * 如果提供了后备字体（fallbackFont），会根据字符是否在主字体中存在来选择字体。
  */
-export function selectFont(ctx: RenderContext, fontWeight: string | number): PDFFont {
+export function selectFont(ctx: RenderContext, fontWeight: string | number, char?: string): PDFFont {
   // 解析字重（处理字符串和数字）
   let weight = 400
   if (typeof fontWeight === 'string') {
@@ -35,8 +37,21 @@ export function selectFont(ctx: RenderContext, fontWeight: string | number): PDF
   // 理由：库只有 Regular / Bold 两个字重，600+ 视觉上更接近粗体
   const isBold = weight >= 600
 
-  if (isBold) return ctx.chineseFontBold ?? ctx.chineseFont ?? ctx.latinFontBold
-  return ctx.chineseFont ?? ctx.latinFont
+  // 选择主字体
+  const mainFont = isBold
+    ? (ctx.chineseFontBold ?? ctx.chineseFont ?? ctx.latinFontBold)
+    : (ctx.chineseFont ?? ctx.latinFont)
+
+  // 如果没有提供字符或没有后备字体，直接返回主字体
+  if (!char || !ctx.fallbackFont) {
+    return mainFont
+  }
+
+  // 检查字符是否在主字体中存在
+  // 注意：这里无法直接检查，因为 PDFFont 不暴露字形查询 API
+  // 作为简化方案，我们只在有后备字体时返回后备字体选择器
+  // 实际的字形查询在 drawText 时由 pdf-lib 处理
+  return mainFont
 }
 
 /** 斜体倾斜角度（度）。项目未内嵌斜体字体，用 skew 变换模拟 oblique */

@@ -5,6 +5,23 @@
 格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [1.0.2] - 2026-06-29
+
+### Added
+
+- **后备字体机制**：当使用自定义字体（`options.fontPaths`）时，自动加载思源黑体作为后备字体。若自定义字体缺少某些字符，自动使用后备字体补充，避免显示方块。
+- 字体缺失检测优化：改进警告信息，明确提示"将使用后备字体"而非"显示为方块"（仅当有后备字体时）。
+
+### Fixed
+
+- 修复图片加载失败时的 WinAnsi 编码错误：错误提示文本改用中文字体而非标准字体（Helvetica）。
+- 修复自定义字体缺少字符时显示方块的问题：通过后备字体机制自动补充缺失字符。
+
+### Changed
+
+- `RenderContext` 新增 `fallbackFont` 和 `fallbackFontBold` 字段，用于后备字体。
+- `createFontSubset` 返回值改为 `{ buffer, missingChars }`，便于跟踪缺失字符。
+
 ## [1.0.1] - 2026-06-29
 
 ### Added

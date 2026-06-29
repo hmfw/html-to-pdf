@@ -9,6 +9,8 @@ export interface RenderContext {
   latinFontBold: PDFFont
   chineseFont?: PDFFont
   chineseFontBold?: PDFFont
+  fallbackFont?: PDFFont // 后备字体（当自定义字体缺少某些字符时使用）
+  fallbackFontBold?: PDFFont // 后备字体 Bold
   containerRect: DOMRect
   pageHeight: number
   pageWidth: number
