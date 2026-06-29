@@ -3,6 +3,7 @@ import { pxToPt, parseColor } from '../htmlParser.js'
 import type { RenderContext } from './context.js'
 import { findPageIndex } from './geometry.js'
 import { selectFont, baselineFromTop } from './text.js'
+import { getStyle, getRect } from './layoutCache.js'
 
 /**
  * 计算 <li> 在同级列表项中的序号（从 1 开始），忽略非 li 兄弟节点。
@@ -29,7 +30,7 @@ function listItemOrdinal(li: HTMLElement): number {
  * - disc/circle 用圆形，square 用小方块，其余（decimal 等）按 "N." 文本绘制
  */
 export function drawListMarker(ctx: RenderContext, li: HTMLElement): void {
-  const styles = window.getComputedStyle(li)
+  const styles = getStyle(ctx.layoutCache, li)
   if (styles.display === 'none' || styles.visibility === 'hidden') return
 
   const type = styles.listStyleType
@@ -39,7 +40,7 @@ export function drawListMarker(ctx: RenderContext, li: HTMLElement): void {
   const range = document.createRange()
   range.selectNodeContents(li)
   const rects = range.getClientRects()
-  const lineRect = rects.length > 0 ? rects[0] : li.getBoundingClientRect()
+  const lineRect = rects.length > 0 ? rects[0] : getRect(ctx.layoutCache, li)
   if (lineRect.height === 0) return
 
   const pageIndex = findPageIndex(ctx, li)

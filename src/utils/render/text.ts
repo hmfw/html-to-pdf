@@ -9,6 +9,7 @@ import {
 import { pxToPt, parseColor } from '../htmlParser.js'
 import type { RenderContext } from './context.js'
 import { findPageIndex } from './geometry.js'
+import { getStyle } from './layoutCache.js'
 
 /**
  * 根据字重选择合适的字体。
@@ -265,7 +266,7 @@ export function renderTextNode(ctx: RenderContext, textNode: Text, parentElement
   const pageRect = pageIndex < ctx.pageRects.length ? ctx.pageRects[pageIndex] : ctx.containerRect
   const page = ctx.pages[pageIndex]
 
-  const styles = window.getComputedStyle(parentElement)
+  const styles = getStyle(ctx.layoutCache, parentElement)
   const fontSize = pxToPt(parseFloat(styles.fontSize)) // px → pt
   const fontWeight = styles.fontWeight
   const color = parseColor(styles.color)

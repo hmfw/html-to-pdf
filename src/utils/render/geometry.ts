@@ -2,6 +2,7 @@ import { PDFPage, moveTo, lineTo, appendBezierCurve, closePath, clip, endPath } 
 import { pxToPt } from '../htmlParser.js'
 import { PDF_CONTAINER_ATTR, PDF_PAGE_ATTR } from '../../constants.js'
 import type { RenderContext, ResolvedBox } from './context.js'
+import { getStyle, getRect, type LayoutCache } from './layoutCache.js'
 
 /**
  * 查找元素所属的 PdfPage 并返回页码
@@ -10,7 +11,7 @@ import type { RenderContext, ResolvedBox } from './context.js'
 export function findPageIndex(ctx: RenderContext, element: HTMLElement): number {
   // 自动分页模式：按元素在视口中的 top 落在哪个「断页带」区间归页
   if (ctx.autoBands) {
-    return findAutoBandIndex(ctx.autoBands, element.getBoundingClientRect().top)
+    return findAutoBandIndex(ctx.autoBands, getRect(ctx.layoutCache, element).top)
   }
 
   // 向上遍历找到最近的 [data-pdf-page] 元素
@@ -81,7 +82,7 @@ function findAutoBandIndex(bands: number[], top: number): number {
  * 返回 null 表示元素不可渲染（零尺寸或超出可用页面）
  */
 export function resolveBox(ctx: RenderContext, element: HTMLElement): ResolvedBox | null {
-  const rect = element.getBoundingClientRect()
+  const rect = getRect(ctx.layoutCache, element)
   if (rect.width === 0 || rect.height === 0) return null
 
   // 通过 DOM 树确定所属页面
@@ -104,8 +105,8 @@ export function resolveBox(ctx: RenderContext, element: HTMLElement): ResolvedBo
 }
 
 /** 读取元素的 border-radius 并换算为 pt（无圆角返回 0） */
-export function getBorderRadiusPt(element: HTMLElement): number {
-  const borderRadius = parseFloat(window.getComputedStyle(element).borderRadius) || 0
+export function getBorderRadiusPt(element: HTMLElement, cache?: LayoutCache): number {
+  const borderRadius = parseFloat(getStyle(cache, element).borderRadius) || 0
   return borderRadius > 0 ? pxToPt(borderRadius) : 0
 }
 
@@ -119,8 +120,9 @@ export function insetToContentBox(
   element: HTMLElement,
   box: ResolvedBox,
   radius: number,
+  cache?: LayoutCache,
 ): { box: ResolvedBox; radius: number } {
-  const styles = window.getComputedStyle(element)
+  const styles = getStyle(cache, element)
   const top = pxToPt((parseFloat(styles.borderTopWidth) || 0) + (parseFloat(styles.paddingTop) || 0))
   const right = pxToPt((parseFloat(styles.borderRightWidth) || 0) + (parseFloat(styles.paddingRight) || 0))
   const bottom = pxToPt((parseFloat(styles.borderBottomWidth) || 0) + (parseFloat(styles.paddingBottom) || 0))

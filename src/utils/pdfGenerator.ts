@@ -6,6 +6,7 @@ import { createFontSubsetsForElement } from './fontSubset.js'
 import { loadFontWithFallback } from './fontLoader.js'
 import { createPerformanceMonitor, type PerformanceMonitor } from './performanceMonitor.js'
 import { collectBreakUnits, packIntoPages, hasManualPages } from './autoPaginate.js'
+import { createLayoutCache } from './render/layoutCache.js'
 import { PDF_PAGE_ATTR } from '../constants.js'
 
 /** pt → px（与 pxToPt 的 0.75 比例互逆） */
@@ -326,6 +327,7 @@ export async function htmlToPdf(element: HTMLElement, options: PdfExportOptions 
       canvasResolver: options.canvasResolver,
       canvasPixelRatio:
         options.canvasPixelRatio ?? Math.max(2, window.devicePixelRatio || 1),
+      layoutCache: createLayoutCache(),
     }
 
     await renderHTML(ctx, element)

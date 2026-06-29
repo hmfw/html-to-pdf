@@ -1,4 +1,5 @@
 import { PDFPage, PDFFont, PDFDocument } from '@pdfme/pdf-lib'
+import type { LayoutCache } from './layoutCache.js'
 
 /** 渲染上下文：贯穿一次导出的字体、页面、坐标基准等共享状态 */
 export interface RenderContext {
@@ -15,6 +16,8 @@ export interface RenderContext {
   containerRect: DOMRect
   pageHeight: number
   pageWidth: number
+  /** 布局读取缓存（getComputedStyle / getBoundingClientRect 的 per-export 缓存） */
+  layoutCache?: LayoutCache
   /** 自定义 canvas → 图片数据的钩子（见 PdfExportOptions.canvasResolver） */
   canvasResolver?: (
     canvas: HTMLCanvasElement,

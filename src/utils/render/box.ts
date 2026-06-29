@@ -2,12 +2,13 @@ import { rgb } from '@pdfme/pdf-lib'
 import { pxToPt, parseColor } from '../htmlParser.js'
 import type { RenderContext, ResolvedBox } from './context.js'
 import { findPageIndex } from './geometry.js'
+import { getStyle, getPseudoStyle, getRect, type LayoutCache } from './layoutCache.js'
 
 /**
  * 绘制元素背景填充（仅在有非透明背景色时绘制），表格与普通元素共用
  */
-export function drawElementFill(element: HTMLElement, box: ResolvedBox): void {
-  const styles = window.getComputedStyle(element)
+export function drawElementFill(element: HTMLElement, box: ResolvedBox, cache?: LayoutCache): void {
+  const styles = getStyle(cache, element)
   const bgColor = styles.backgroundColor
   if (!bgColor || bgColor === 'rgba(0, 0, 0, 0)' || bgColor === 'transparent') return
 
@@ -31,8 +32,8 @@ export function drawElementFill(element: HTMLElement, box: ResolvedBox): void {
  * - 四条边宽度/颜色/样式一致且有圆角时，用描边矩形画出圆角边框
  * - 否则逐边作为填充条贴在 box 对应边缘（不支持圆角）
  */
-export function drawElementBorders(element: HTMLElement, resolved: ResolvedBox): void {
-  const styles = window.getComputedStyle(element)
+export function drawElementBorders(element: HTMLElement, resolved: ResolvedBox, cache?: LayoutCache): void {
+  const styles = getStyle(cache, element)
   const edges = [
     { width: styles.borderTopWidth, style: styles.borderTopStyle, color: styles.borderTopColor },
     { width: styles.borderRightWidth, style: styles.borderRightStyle, color: styles.borderRightColor },
@@ -104,7 +105,7 @@ export function drawElementBorders(element: HTMLElement, resolved: ResolvedBox):
  * - 需要显式设置 width 和 height（auto 高度会跳过）
  */
 export function drawPseudoElement(ctx: RenderContext, element: HTMLElement, pseudoType: '::before' | '::after'): void {
-  const styles = window.getComputedStyle(element, pseudoType)
+  const styles = getPseudoStyle(ctx.layoutCache, element, pseudoType)
 
   // 判断伪元素是否应该渲染
   const content = styles.content
@@ -117,7 +118,7 @@ export function drawPseudoElement(ctx: RenderContext, element: HTMLElement, pseu
   const height = parseFloat(styles.height)
   if (!width || !height || isNaN(width) || isNaN(height)) return
 
-  const rect = element.getBoundingClientRect()
+  const rect = getRect(ctx.layoutCache, element)
   const pageIndex = findPageIndex(ctx, element)
   if (pageIndex >= ctx.pages.length) return
 
@@ -153,7 +154,7 @@ export function drawPseudoElement(ctx: RenderContext, element: HTMLElement, pseu
     }
   } else {
     // static/relative：按文档流定位
-    const elStyle = window.getComputedStyle(element)
+    const elStyle = getStyle(ctx.layoutCache, element)
     const paddingTop = parseFloat(elStyle.paddingTop) || 0
     const paddingBottom = parseFloat(elStyle.paddingBottom) || 0
     const paddingLeft = parseFloat(elStyle.paddingLeft) || 0

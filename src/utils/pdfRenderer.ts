@@ -3,6 +3,7 @@ import { resolveBox, getBorderRadiusPt, insetToContentBox } from './render/geome
 import { renderTextNode } from './render/text.js'
 import { embedImageElement, embedCanvasElement, renderImage, embedSvgElement } from './render/image.js'
 import { drawListMarker } from './render/list.js'
+import { getStyle } from './render/layoutCache.js'
 import type { RenderContext } from './render/context.js'
 
 export type { RenderContext }
@@ -26,7 +27,7 @@ export async function renderHTML(ctx: RenderContext, element: HTMLElement): Prom
  * 第一遍：递归绘制盒子装饰层（背景 → 边框 → ::before → 子元素 → ::after），不绘制文字。
  */
 async function drawBoxLayer(ctx: RenderContext, element: HTMLElement): Promise<void> {
-  const styles = window.getComputedStyle(element)
+  const styles = getStyle(ctx.layoutCache, element)
   if (styles.display === 'none' || styles.visibility === 'hidden') return
 
   const tagName = element.tagName.toLowerCase()
@@ -36,29 +37,29 @@ async function drawBoxLayer(ctx: RenderContext, element: HTMLElement): Promise<v
   const box = resolveBox(ctx, element)
   if (box) {
     // 1. 绘制背景
-    drawElementFill(element, box)
+    drawElementFill(element, box, ctx.layoutCache)
 
     // 2. 绘制边框
-    drawElementBorders(element, box)
+    drawElementBorders(element, box, ctx.layoutCache)
 
     // 3. img/canvas：先画边框，再画图片，最后画 ::before（图片覆盖边框，::before 覆盖图片）
     // 位图绘制在 content-box（内缩 border + padding），让边框露出；有圆角时把图片裁成圆角矩形
     if (tagName === 'img') {
-      const { box: contentBox, radius } = insetToContentBox(element, box, getBorderRadiusPt(element))
+      const { box: contentBox, radius } = insetToContentBox(element, box, getBorderRadiusPt(element, ctx.layoutCache), ctx.layoutCache)
       await renderImage(ctx, contentBox, radius, () => embedImageElement(ctx, element as HTMLImageElement))
       drawPseudoElement(ctx, element, '::before')
       return
     }
 
     if (tagName === 'canvas') {
-      const { box: contentBox, radius } = insetToContentBox(element, box, getBorderRadiusPt(element))
+      const { box: contentBox, radius } = insetToContentBox(element, box, getBorderRadiusPt(element, ctx.layoutCache), ctx.layoutCache)
       await renderImage(ctx, contentBox, radius, () => embedCanvasElement(ctx, element as HTMLCanvasElement))
       drawPseudoElement(ctx, element, '::before')
       return
     }
 
     if (tagName === 'svg') {
-      const { box: contentBox, radius } = insetToContentBox(element, box, getBorderRadiusPt(element))
+      const { box: contentBox, radius } = insetToContentBox(element, box, getBorderRadiusPt(element, ctx.layoutCache), ctx.layoutCache)
       await renderImage(ctx, contentBox, radius, () => embedSvgElement(ctx, element as unknown as SVGSVGElement))
       drawPseudoElement(ctx, element, '::before')
       return
@@ -109,8 +110,8 @@ async function drawTableBoxLayer(ctx: RenderContext, table: HTMLElement): Promis
   for (const group of groups) {
     const gbox = resolveBox(ctx, group)
     if (gbox) {
-      drawElementFill(group, gbox)
-      drawElementBorders(group, gbox)
+      drawElementFill(group, gbox, ctx.layoutCache)
+      drawElementBorders(group, gbox, ctx.layoutCache)
     }
   }
 
@@ -119,8 +120,8 @@ async function drawTableBoxLayer(ctx: RenderContext, table: HTMLElement): Promis
   for (const row of rows) {
     const rbox = resolveBox(ctx, row)
     if (rbox) {
-      drawElementFill(row, rbox)
-      drawElementBorders(row, rbox)
+      drawElementFill(row, rbox, ctx.layoutCache)
+      drawElementBorders(row, rbox, ctx.layoutCache)
     }
   }
 
@@ -136,7 +137,7 @@ async function drawTableBoxLayer(ctx: RenderContext, table: HTMLElement): Promis
  * 第二遍：递归绘制文字层（文本节点 + 列表 marker），不再绘制任何背景。
  */
 function drawTextLayer(ctx: RenderContext, element: HTMLElement): void {
-  const styles = window.getComputedStyle(element)
+  const styles = getStyle(ctx.layoutCache, element)
   if (styles.display === 'none' || styles.visibility === 'hidden') return
 
   const tagName = element.tagName.toLowerCase()

@@ -7,6 +7,12 @@
 
 ## [1.2.1] - 2026-06-29
 
+### Performance
+
+- **布局读取缓存**：渲染分两遍遍历 DOM（盒子层 + 文字层），且 box/border/radius 等多个绘制函数会对同一元素重复读取样式与矩形。新增 per-export 的 `getComputedStyle` / `getBoundingClientRect` 缓存（WeakMap），使同一元素在一次导出中只读取一次，减少强制同步布局（reflow）。元素越多收益越明显。
+  - Range 行盒测量（`range.getBoundingClientRect()`）保持实时读取，不走缓存。
+  - 缓存随渲染上下文创建/回收，不跨导出泄漏，对外 API 与渲染结果无变化。
+
 ### Changed
 
 - **后备字体改为按需加载**：使用自定义字体（`fontPaths`）时，不再无条件预下载思源黑体。现在先扫描内容并子集化主字体，只有**真正检测到缺字**时才下载后备字体。自定义字体完整覆盖所用字符时，零额外字体请求（此前会白白下载 16-17MB）。
