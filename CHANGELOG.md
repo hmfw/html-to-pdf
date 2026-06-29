@@ -5,16 +5,18 @@
 格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
-## [Unreleased]
+## [1.0.1] - 2026-06-29
 
 ### Added
 
+- 字体子集化增强：子集化时检测字体中不存在的字符，并在控制台输出警告，帮助排查"方块字符"问题。
 - 字体随 npm 包发布：构建时将思源黑体 Regular/Bold 复制到 `dist/fonts/`，安装即可用，无需手动放置字体。
 - 字体多源降级加载（`fontLoader`）：按「本地 `/fonts/` → npmmirror → jsDelivr → unpkg」顺序自动降级，兼顾国内网络与离线/内网部署。
 - 字体内容校验：通过魔数识别字体文件，避免 SPA 的 404 兜底页被误当字体嵌入。
 - `debug` 选项：按需开启控制台性能报告，默认关闭。
 - `browserslist` 字段与 README「浏览器支持」说明（Chrome 90 / Firefox 88 / Safari 14 / Edge 90，不支持 IE）。
 - `prepublishOnly` 钩子：发布前自动执行 测试 → 构建 → 打包预演。
+- README 新增「字体子集化说明」和「常见问题」章节，详细说明方块字符的诊断和解决方法。
 
 ### Changed
 

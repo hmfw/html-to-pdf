@@ -74,11 +74,27 @@ export async function createFontSubset(
   const glyphIds = new Set<number>()
   glyphIds.add(0)
 
+  const missingChars: string[] = []
+
   for (const char of characters) {
     const glyph = font.charToGlyph(char)
-    if (glyph && glyph.index !== undefined) {
+    if (glyph && glyph.index !== undefined && glyph.index !== 0) {
+      // glyph.index = 0 表示映射到 .notdef，即字体中不存在该字符
       glyphIds.add(glyph.index)
+    } else if (!glyph || glyph.index === 0) {
+      // 记录字体中不存在的字符
+      const code = char.codePointAt(0)?.toString(16).toUpperCase().padStart(4, '0')
+      missingChars.push(`'${char}' (U+${code})`)
     }
+  }
+
+  // 如果有字符在字体中不存在，打印警告
+  if (missingChars.length > 0) {
+    console.warn(
+      `[html-to-pdf] 以下 ${missingChars.length} 个字符在字体 ${familyName} ${styleName} 中不存在，将显示为方块：\n` +
+      missingChars.slice(0, 20).join(', ') +
+      (missingChars.length > 20 ? `\n... 及其他 ${missingChars.length - 20} 个字符` : '')
+    )
   }
 
   // 创建子集字体
