@@ -197,12 +197,15 @@ async function embedChineseFonts(
   timeout: number = 30000,
   enableFallback: boolean = true,
   basePath: string = '/',
+  converterOptions: PdfExportOptions['converterOptions'],
 ): Promise<{
   regular: PDFFont
   bold?: PDFFont
   fallbackRegular?: PDFFont
   fallbackBold?: PDFFont
   missingChars?: Set<string>
+  charMapRegular?: Map<string, string>
+  charMapBold?: Map<string, string>
 }> {
   // 判断是否使用自定义字体
   const hasCustomFont = !!(customFontPaths?.regular || customFontPaths?.bold)
@@ -251,11 +254,15 @@ async function embedChineseFonts(
     return { regular, bold, fallbackRegular, fallbackBold }
   }
 
-  const subsets = await createFontSubsetsForElement(element, {
-    regular: regularBuf,
-    bold: boldBuf,
-    loadFallback,
-  })
+  const subsets = await createFontSubsetsForElement(
+    element,
+    {
+      regular: regularBuf,
+      bold: boldBuf,
+      loadFallback,
+    },
+    converterOptions
+  )
   monitor.mark('创建字体子集')
 
   if (!subsets.regular) {
@@ -268,7 +275,15 @@ async function embedChineseFonts(
   const fallbackBold = subsets.fallbackBold ? await pdfDoc.embedFont(subsets.fallbackBold) : undefined
   monitor.mark('嵌入子集字体')
 
-  return { regular, bold, fallbackRegular, fallbackBold, missingChars: subsets.missingChars }
+  return {
+    regular,
+    bold,
+    fallbackRegular,
+    fallbackBold,
+    missingChars: subsets.missingChars,
+    charMapRegular: subsets.charMapRegular,
+    charMapBold: subsets.charMapBold,
+  }
 }
 
 /**
@@ -300,6 +315,7 @@ export async function htmlToPdf(element: HTMLElement, options: PdfExportOptions 
       options.fontLoadTimeout ?? 30000,
       options.fontFallback ?? true,
       options.basePath ?? '/',
+      options.converterOptions,
     )
 
     // 页面尺寸、边距、方向
@@ -310,6 +326,14 @@ export async function htmlToPdf(element: HTMLElement, options: PdfExportOptions 
     const containerRect = element.getBoundingClientRect()
     const { pageRects, autoBands } = computePages(pdfDoc, element, containerRect, finalPageSize)
     monitor.mark(`创建 ${pdfDoc.getPageCount()} 个页面`)
+
+    // 调试：打印字符映射信息
+    if (chineseFonts.charMapRegular && chineseFonts.charMapRegular.size > 0) {
+      console.debug(`[html-to-pdf] Regular 字符映射表大小: ${chineseFonts.charMapRegular.size}`)
+    }
+    if (chineseFonts.charMapBold && chineseFonts.charMapBold.size > 0) {
+      console.debug(`[html-to-pdf] Bold 字符映射表大小: ${chineseFonts.charMapBold.size}`)
+    }
 
     const ctx: RenderContext = {
       pdfDoc,
@@ -322,6 +346,8 @@ export async function htmlToPdf(element: HTMLElement, options: PdfExportOptions 
       fallbackFont: chineseFonts.fallbackRegular,
       fallbackFontBold: chineseFonts.fallbackBold,
       missingChars: chineseFonts.missingChars,  // 新增：传递缺失字符集合
+      charMapRegular: chineseFonts.charMapRegular,  // 新增：传递简繁映射
+      charMapBold: chineseFonts.charMapBold,  // 新增：传递简繁映射
       containerRect,
       pageHeight: finalPageSize.height,
       pageWidth: finalPageSize.width,

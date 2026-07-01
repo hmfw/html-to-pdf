@@ -266,6 +266,61 @@ location /fonts/ {
 
 如果字体有更多字重（Light、Medium、Black），目前无法直接使用，需要修改源码。
 
+### 5. 繁体字库与简体内容
+
+当使用繁体字库（如思源黑体繁体版 `Source Han Sans TC/HK`）导出包含简体字的内容时，会遇到缺字问题（简体字在繁体字库中不存在）。
+
+有以下解决方案：
+
+**方案 1：启用转换（推荐）**
+
+```typescript
+await htmlToPdf(element, {
+  fontPaths: {
+    regular: '/fonts/SourceHanSansHK-Regular.otf',  // 香港繁体字库
+    bold: '/fonts/SourceHanSansHK-Bold.otf'
+  },
+  converterOptions: { from: 'cn', to: 'hk' },  // 简体→香港繁体
+  fontFallback: false  // 可选：关闭后备字体，完全依赖转换
+})
+
+// 或台湾繁体
+await htmlToPdf(element, {
+  fontPaths: {
+    regular: '/fonts/SourceHanSansTC-Regular.otf',  // 台湾繁体字库
+    bold: '/fonts/SourceHanSansTC-Bold.otf'
+  },
+  converterOptions: { from: 'cn', to: 'tw' },  // 简体→台湾繁体
+  fontFallback: false
+})
+```
+
+常用配置：
+- `{ from: 'cn', to: 'hk' }`：简体→香港繁体（推荐）
+- `{ from: 'cn', to: 'tw' }`：简体→台湾繁体
+- `{ from: 'cn', to: 'twp' }`：简体→台湾繁体（含成语）
+- `{ from: 'tw', to: 'cn' }`：繁体→简体（反向转换）
+
+简体字（如"简体字"）会自动转换为繁体（"簡體字"）并使用繁体字库渲染，无需加载额外字体。详见 [转换文档](converter.md)。
+
+**方案 2：使用后备字体**
+
+```typescript
+await htmlToPdf(element, {
+  fontPaths: {
+    regular: '/fonts/SourceHanSansTC-Regular.otf',
+    bold: '/fonts/SourceHanSansTC-Bold.otf'
+  },
+  fontFallback: true  // 默认开启：缺失字符使用思源黑体简体补充
+})
+```
+
+需要同时托管思源黑体简体版，缺失字符会按需加载后备字体。
+
+**方案 3：使用通用字库**
+
+使用同时包含简繁体的字体（如 Noto Sans CJK），避免缺字问题。
+
 ---
 
 ## 高级用法（未来扩展）

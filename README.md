@@ -108,6 +108,31 @@ await htmlToPdf(element, {
 > 1. 同时托管思源黑体到 `/fonts/` 目录，让后备机制生效
 > 2. 或使用包含所需全部字符的字体（如同时包含简繁体的 Noto Sans CJK）
 > 3. 或设置 `fontFallback: false` 并确保自定义字体包含所有需要的字符
+> 4. 或启用**简繁转换**（见下文）：使用繁体字库时自动转换简体字
+
+**字符转换**：当使用繁体字库导出包含简体字的内容时（或反之），可以配置 OpenCC 进行字符转换，避免缺字问题。**推荐配置为简体→香港繁体**：
+
+```ts
+await htmlToPdf(element, {
+  fontPaths: {
+    regular: '/fonts/SourceHanSansHK-Regular.otf',  // 香港繁体字库
+    bold: '/fonts/SourceHanSansHK-Bold.otf'
+  },
+  converterOptions: { from: 'cn', to: 'hk' },  // 简体→香港繁体
+  fontFallback: false  // 可选：关闭后备字体，完全依赖转换
+})
+
+// 台湾繁体
+await htmlToPdf(element, {
+  fontPaths: {
+    regular: '/fonts/SourceHanSansTC-Regular.otf',
+    bold: '/fonts/SourceHanSansTC-Bold.otf'
+  },
+  converterOptions: { from: 'cn', to: 'tw' }  // 简体→台湾繁体
+})
+```
+
+常用配置：`{ from: 'cn', to: 'hk' }`（香港繁体）、`{ from: 'cn', to: 'tw' }`（台湾繁体）、`{ from: 'tw', to: 'cn' }`（繁体→简体）。详见 [字符转换文档](docs/converter.md)。
 
 > 当前 PDF 生成只使用 Regular 和 Bold 两个字重。`src/styles/fonts.css` 中声明的其它字重仅用于网页预览。
 

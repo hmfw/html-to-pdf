@@ -13,6 +13,8 @@ export interface RenderContext {
   fallbackFont?: PDFFont // 后备字体（当自定义字体缺少某些字符时使用）
   fallbackFontBold?: PDFFont // 后备字体 Bold
   missingChars?: Set<string> // 主字体中缺失的字符集合
+  charMapRegular?: Map<string, string> // Regular 字体简繁映射（简体→繁体）
+  charMapBold?: Map<string, string> // Bold 字体简繁映射（简体→繁体）
   containerRect: DOMRect
   pageHeight: number
   pageWidth: number

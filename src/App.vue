@@ -9,9 +9,9 @@
       <div ref="pdfContainer" data-pdf class="pdf-document">
         <!-- 第 1 页：文本、颜色、字重、斜体 -->
         <div data-pdf-page class="pdf-page">
-          <h2 style="margin-top: 0;">第 1 页 · 文本与排版</h2>
+          <h2 style="margin-top: 0">第 1 页 · 文本与排版</h2>
 
-          <h3>中英文混排</h3>
+          <h3>中英文混排，组合</h3>
           <p>这是一段中文文本，使用思源黑体显示。</p>
           <p>This is English text content.</p>
           <p>中英文混排：Hello 世界！数字 12345。</p>
@@ -112,7 +112,7 @@
           <h3>图片</h3>
           <div class="image-container">
             <img :src="iconImage" alt="示例图片" class="demo-image" />
-            <img :src="iconSvg" >
+            <img :src="iconSvg" />
           </div>
 
           <h3>Canvas 绘图</h3>
@@ -269,21 +269,28 @@
 
     <h1 style="margin-top: 48px">自动分页示例（无 data-pdf-page）</h1>
     <p class="intro">
-      下面的容器只标了 <code>data-pdf</code>，没有任何 <code>data-pdf-page</code>。内容超过一页时会按内容流自动分页，
-      并尽量在段落 / 图片 / 表格行边界断页。
+      下面的容器只标了 <code>data-pdf</code>，没有任何
+      <code>data-pdf-page</code>。内容超过一页时会按内容流自动分页， 并尽量在段落 / 图片 /
+      表格行边界断页。
     </p>
 
     <div class="demo-section">
       <div ref="autoContainer" data-pdf class="pdf-document auto-doc">
-        <h2 style="margin-top: 0;">自动分页长文档</h2>
+        <h2 style="margin-top: 0">自动分页长文档</h2>
         <p v-for="n in 24" :key="'p' + n">
-          第 {{ n }} 段：这是一段用于演示自动分页的长文本。库会遍历段落、标题、图片、表格行等不可分割的「叶子块」，
+          第
+          {{ n }}
+          段：这是一段用于演示自动分页的长文本。库会遍历段落、标题、图片、表格行等不可分割的「叶子块」，
           累计高度超过一页可用区域时，在下一个块的顶部断页，使其整体落到下一页，从而避免文字被切成半行。
           中英文混排示例 Auto pagination keeps each block intact across page boundaries.
         </p>
         <table class="data-table">
           <thead>
-            <tr><th>序号</th><th>任务</th><th>状态</th></tr>
+            <tr>
+              <th>序号</th>
+              <th>任务</th>
+              <th>状态</th>
+            </tr>
           </thead>
           <tbody>
             <tr v-for="n in 30" :key="'r' + n">
@@ -367,6 +374,14 @@ async function handleExport() {
   try {
     const result = await htmlToPdf(pdfContainer.value, {
       filename: 'comprehensive-demo',
+      // fontPaths: {
+      //   regular: '/public/fonts/AlibabaSansHK-55.woff',
+      //   bold: '/public/fonts/AlibabaSansHK-75.woff',
+      // },
+      converterOptions: {
+        from: 'cn',
+        to: 'hk',
+      },
     })
 
     if (result.success) {

@@ -49,8 +49,9 @@ npm run test:watch     # 监听模式
 - `src/types.ts` — 公共类型：`PdfExportOptions`、`PdfGenerateResult`、`ExportStatus`。**这是 API 的唯一真相来源**。
 - `src/utils/pdfGenerator.ts` — 导出主流程 `htmlToPdf`。负责字体嵌入、页面创建（`computePages` 手动分页 / `computeAutoPages` 自动分页）、坐标系初始化，最后自动触发浏览器下载。
 - `src/utils/autoPaginate.ts` — 自动分页（无 `data-pdf-page` 时）。`collectBreakUnits` 采集叶子块，`packIntoPages`（纯函数，有单测）贪心打包出每页断点。
-- `src/utils/pdfRenderer.ts` — 渲染核心。递归遍历 DOM，`resolveBox` 做 px→pt 坐标换算（含 PDF 的 Y 轴翻转），`renderTextNode` 用 `Range` 精确定位文本，并处理字重、斜体（skew 模拟）、`<pre>` 换行。
-- `src/utils/fontSubset.ts` — 用 `opentype.js` 扫描元素字符、过滤 emoji、生成字体子集。
+- `src/utils/pdfRenderer.ts` — 渲染核心。递归遍历 DOM，`resolveBox` 做 px→pt 坐标换算（含 PDF 的 Y 轴翻转），`renderTextNode` 用 `Range` 精确定位文本，并处理字重、斜体（skew 模拟）、`<pre>` 换行。当存在 `charMap`（字符映射）时，使用 `renderTextWithFallback` 进行逐字符渲染和映射。
+- `src/utils/fontSubset.ts` — 用 `opentype.js` 扫描元素字符、过滤 emoji、生成字体子集。支持字符转换（`converterOptions`）：遇到主字体中不存在的字符时，尝试使用 OpenCC 转换，如果转换后的字符存在则记录映射关系到 `charMap`。
+- `src/utils/textConverter.ts` — OpenCC 字符转换工具。提供 `convertCharacters`（字符集合转换）和 `convertText`（文本转换）函数，按配置（`{ from, to }`）缓存转换器实例。导出 `ConverterOptions` 类型。
 - `src/utils/htmlParser.ts` — `pxToPt`（比例 0.75）和 `parseColor`（hex/短 hex/rgba）。
 - `src/utils/imageHelper.ts` — 图片加载、Canvas 转 PNG、格式检测。
 - `src/App.vue` — 开发示例（覆盖库支持的全部内容与样式特性），通过模板 ref 拿到容器后调用 `htmlToPdf`。仅供 `npm run dev` 预览，不打进库产物。
@@ -89,6 +90,24 @@ npm run test:watch     # 监听模式
 - **字体子集化默认开启**，可通过 `options.fontSubset = false` 关闭（关闭时嵌入完整字体，文件显著增大）。emoji 等符号会被 `fontSubset.ts` 过滤掉。
 - 字体文件较大（每个约 16–17MB），保存在 `public/fonts/`，仅供开发时使用和用户复制，**不随 npm 包发布**。子集化后 PDF 文件仅包含实际使用的字符。
 - 用户可通过 `options.fontPaths = { regular, bold }` 自定义字体路径（本地路径或 CDN URL），详见 `docs/custom-fonts.md`。
+
+### 字符转换（OpenCC）
+
+- 通过 `options.converterOptions` 配置 OpenCC 字符转换（如简繁转换），避免因字库缺失字符而需要加载后备字体。
+- 配置格式：`{ from: string, to: string }`，如 `{ from: 'cn', to: 'hk' }`（简体→香港繁体）。
+- 转换逻辑在 `fontSubset.ts` 的 `createFontSubset` 中：
+  - 遇到主字体中不存在的字符时，使用 `textConverter.ts` 的 `convertCharacters` 进行转换
+  - 如果转换后的字符存在于主字体中，记录映射关系到 `charMap`（原字符→转换后字符）
+  - 转换成功的字符不记录到 `missingChars`，避免加载后备字体
+  - 转换后无变化的字符（如特殊符号）既不使用后备字体也不打印警告
+- 渲染时在 `render/text.ts` 的 `renderTextWithFallback` 中应用映射：
+  - 从 `ctx.charMapRegular` / `ctx.charMapBold` 获取映射表
+  - 使用 `charMap?.get(char) ?? char` 获取实际渲染的字符
+  - **关键**：只要存在 `charMap`，必须使用 `renderTextWithFallback` 进行逐字符渲染，不能直接用 `drawStyledText`
+- `converterOptions` 与后备字体可同时启用：转换优先，转换失败才使用后备字体。
+- 转换器使用单例缓存（`textConverter.ts`），按配置 `{ from, to }` 缓存多个转换器实例。
+- 类型定义在 `types.ts`，导出 `ConverterOptions` 接口供外部使用。
+- 相关文档：`docs/converter.md`。
 
 ## 修改时的约定
 

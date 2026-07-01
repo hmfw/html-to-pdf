@@ -1,3 +1,9 @@
+/** OpenCC 转换器配置 */
+export interface ConverterOptions {
+  from: string
+  to: string
+}
+
 export interface PdfExportOptions {
   /** PDF 文件名（不含扩展名） */
   filename?: string
@@ -71,6 +77,37 @@ export interface PdfExportOptions {
    *   但可避免子集化对个别字体/字形的兼容问题。
    */
   fontSubset?: boolean
+  /**
+   * OpenCC 字符转换配置（默认 undefined，不转换）。
+   *
+   * 当使用繁体字库遇到简体字时，或使用简体字库遇到繁体字时，
+   * 可以配置 OpenCC 进行字符转换，避免因字库缺失字符而需要加载后备字体。
+   *
+   * 推荐配置（简体→香港繁体）：`{ from: 'cn', to: 'hk' }`
+   *
+   * 常用配置：
+   * - `{ from: 'cn', to: 'hk' }`：简体→香港繁体（推荐）
+   * - `{ from: 'cn', to: 'tw' }`：简体→台湾繁体
+   * - `{ from: 'cn', to: 'twp' }`：简体→台湾繁体（含成语）
+   * - `{ from: 'cn', to: 't' }`：简体→标准繁体
+   * - `{ from: 'tw', to: 'cn' }`：台湾繁体→简体
+   * - `{ from: 'hk', to: 'cn' }`：香港繁体→简体
+   *
+   * 注意：仅在字库缺失字符时才会转换，已存在的字符不受影响。
+   *
+   * @example
+   * ```typescript
+   * // 简体→香港繁体（推荐）
+   * { converterOptions: { from: 'cn', to: 'hk' } }
+   *
+   * // 简体→台湾繁体
+   * { converterOptions: { from: 'cn', to: 'tw' } }
+   *
+   * // 繁体→简体（反向转换）
+   * { converterOptions: { from: 'tw', to: 'cn' } }
+   * ```
+   */
+  converterOptions?: ConverterOptions
   /**
    * 字体加载超时时间（毫秒，默认 30000，即 30 秒）。
    *

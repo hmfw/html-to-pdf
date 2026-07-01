@@ -85,15 +85,20 @@ type RenderWithFallbackOptions = {
 
 /**
  * 渲染文本，根据每个字符是否在主字体中存在，动态选择主字体或后备字体。
+ * 支持简繁转换：当字符有映射时（繁体字库遇到简体字），使用映射后的繁体字符。
  * 将相邻使用相同字体的字符合并为段，减少 drawText 调用次数。
  */
 function renderTextWithFallback(page: PDFPage, text: string, opts: RenderWithFallbackOptions): void {
   const { x, y, size, fontWeight, color, italic, ctx } = opts
-
   const chars = Array.from(text) // 处理代理对
   let currentX = x
   let segmentText = ''
   let segmentFont: PDFFont | null = null
+
+  // 根据字重选择简繁映射表
+  const weight = typeof fontWeight === 'number' ? fontWeight : (fontWeight === 'bold' || fontWeight === 'bolder' ? 700 : 400)
+  const isBold = weight >= 600
+  const charMap = isBold ? ctx.charMapBold : ctx.charMapRegular
 
   const flushSegment = () => {
     if (segmentText && segmentFont) {
@@ -113,6 +118,14 @@ function renderTextWithFallback(page: PDFPage, text: string, opts: RenderWithFal
   }
 
   for (const char of chars) {
+    // 如果有简繁映射，使用映射后的繁体字符
+    const actualChar = charMap?.get(char) ?? char
+
+    // 调试：如果发生了映射，打印一次（仅第一个字符）
+    if (actualChar !== char && chars.indexOf(char) === 0) {
+      console.debug(`[html-to-pdf] 字符映射示例: '${char}' → '${actualChar}'`)
+    }
+
     const font = selectFont(ctx, fontWeight, char)
 
     // 如果字体改变，先绘制当前段，再开始新段
@@ -121,7 +134,7 @@ function renderTextWithFallback(page: PDFPage, text: string, opts: RenderWithFal
     }
 
     segmentFont = font
-    segmentText += char
+    segmentText += actualChar  // 使用映射后的字符
   }
 
   // 绘制最后一段
@@ -134,7 +147,6 @@ function renderTextWithFallback(page: PDFPage, text: string, opts: RenderWithFal
  */
 function drawStyledText(page: PDFPage, text: string, opts: DrawTextOptions): void {
   const { x, y, italic, ...rest } = opts
-
   if (!italic) {
     page.drawText(text, { x, y, ...rest })
     return
@@ -148,6 +160,7 @@ function drawStyledText(page: PDFPage, text: string, opts: DrawTextOptions): voi
     concatTransformationMatrix(1, 0, tan, 1, 0, 0),
     concatTransformationMatrix(1, 0, 0, 1, -x, -y),
   )
+  
   page.drawText(text, { x, y, ...rest })
   page.pushOperators(popGraphicsState())
 }
@@ -253,7 +266,6 @@ function measureVisualLines(textNode: Text): MeasuredLine[] {
 export function renderTextNode(ctx: RenderContext, textNode: Text, parentElement: HTMLElement): void {
   const text = textNode.textContent?.trim()
   if (!text) return
-
   // 用临时 range 获取文本节点的精确位置
   const range = document.createRange()
   range.selectNodeContents(textNode)
@@ -275,6 +287,12 @@ export function renderTextNode(ctx: RenderContext, textNode: Text, parentElement
 
   // 检查是否需要使用后备字体（有缺失字符且后备字体存在）
   const needsFallback = !!(ctx.missingChars && ctx.missingChars.size > 0 && ctx.fallbackFont)
+
+  // 检查是否需要字符映射（简繁转换）
+  const needsCharMapping = !!(ctx.charMapRegular || ctx.charMapBold)
+
+  // 如果需要后备字体或字符映射，使用逐字符渲染
+  const needsCharByCharRendering = needsFallback || needsCharMapping
 
   // 检查是否在 <pre> 标签内（需要保留换行符）
   let isPreformatted = false
@@ -302,8 +320,8 @@ export function renderTextNode(ctx: RenderContext, textNode: Text, parentElement
       const lineY = ctx.pageHeight - pxToPt(rect.top - pageRect.top) - firstBaseline - index * lineHeight
 
       try {
-        if (needsFallback) {
-          // 需要后备字体：逐字符渲染
+        if (needsCharByCharRendering) {
+          // 需要后备字体或字符映射：逐字符渲染
           renderTextWithFallback(page, line, {
             x: pxToPt(rect.left - ctx.containerRect.left),
             y: lineY,
@@ -343,8 +361,8 @@ export function renderTextNode(ctx: RenderContext, textNode: Text, parentElement
       const baselineY =
         ctx.pageHeight - pxToPt(line.top - pageRect.top) - baselineFromTop(defaultFont, fontSize, pxToPt(line.height))
       try {
-        if (needsFallback) {
-          // 需要后备字体：逐字符渲染
+        if (needsCharByCharRendering) {
+          // 需要后备字体或字符映射：逐字符渲染
           renderTextWithFallback(page, line.text, {
             x,
             y: baselineY,

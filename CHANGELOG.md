@@ -5,6 +5,41 @@
 格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [1.4.0] - 2025-01-09
+
+### Added
+
+- **字符转换支持（OpenCC）**：新增 `converterOptions` 选项，使用 OpenCC 进行中文变体转换，避免因字库缺失字符而需要加载后备字体。
+  - 配置格式：`{ from: string, to: string }`（OpenCC 标准格式）
+  - 推荐配置：`{ from: 'cn', to: 'hk' }`（简体→香港繁体）
+  - 支持多种转换方向：简体↔繁体（香港/台湾/标准）、繁体含成语等
+  - 常用配置：`{ from: 'cn', to: 'hk' }`（香港繁体）、`{ from: 'cn', to: 'tw' }`（台湾繁体）、`{ from: 'cn', to: 'twp' }`（台湾繁体含成语）、`{ from: 'tw', to: 'cn' }`（反向转换）
+  - 转换器按配置缓存，支持多个转换规则并存
+  - 转换发生在字体子集创建阶段，字符映射表随渲染上下文传递
+  - 可与后备字体机制同时启用（转换优先，转换失败才使用后备字体），也可单独使用（`fontFallback: false`）
+  - 导出 `ConverterOptions` 类型供外部使用
+- **优化日志信息**：
+  - 转换成功时显示转换字符数量
+  - 根据是否有后备字体，准确提示缺失字符的处理方式
+  - 特殊字符（无需转换）不再打印警告，避免误导
+
+### Changed
+
+- **Breaking**: 移除 `tryS2TConversion` 选项，改为 `converterOptions`
+- **Breaking**: `converterOptions` 类型为 `{ from: string, to: string }`，不再支持 boolean 快捷方式
+- 特殊字符（转换后无变化）在配置转换时不会触发后备字体加载，避免不必要的字体下载
+
+### Fixed
+
+- 修复渲染时字符映射未生效的问题：当配置 `converterOptions` 时，即使不需要后备字体，也会正确应用字符映射
+- 修复特殊字符被误判为"缺失"的问题：无需转换的字符不会被标记为转换失败
+
+### Documentation
+
+- 新增 `docs/converter.md` 详细说明字符转换功能
+- 更新 `README.md`、`docs/custom-fonts.md` 中的字符转换示例
+- 更新 `CLAUDE.md` 添加字符转换功能的技术说明
+
 ## [1.3.0] - 2026-06-29
 
 ### Added
