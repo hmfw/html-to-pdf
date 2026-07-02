@@ -23,8 +23,8 @@ const element = document.querySelector('#content')
 await htmlToPdf(element, {
   filename: '繁体文档',
   fontPaths: {
-    regular: '/fonts/SourceHanSansHK-Regular.otf',  // 香港繁体字库
-    bold: '/fonts/SourceHanSansHK-Bold.otf'
+    regular: '/fonts/SourceHanSansHK-Regular.woff',  // 香港繁体字库
+    bold: '/fonts/SourceHanSansHK-Bold.woff'
   },
   converterOptions: { from: 'cn', to: 'hk' },  // 简体→香港繁体
   fontFallback: false  // 可选：关闭后备字体，完全依赖转换

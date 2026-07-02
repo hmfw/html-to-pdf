@@ -40,8 +40,8 @@ interface PdfExportOptions {
   
   /** 自定义字体路径（可选，默认尝试 /fonts/ 路径） */
   fontPaths?: {
-    regular?: string  // 默认 '/fonts/Source_Han_Sans_SC_Regular.otf'
-    bold?: string     // 默认 '/fonts/Source_Han_Sans_SC_Bold.otf'
+    regular?: string  // 默认 '/fonts/Source_Han_Sans_SC_Regular.woff'
+    bold?: string     // 默认 '/fonts/Source_Han_Sans_SC_Bold.woff'
   }
 
   /**

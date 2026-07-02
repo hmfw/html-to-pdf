@@ -12,8 +12,8 @@
 
 /** 字体文件名（与 public/fonts、dist/fonts 保持一致） */
 export const FONT_FILES = {
-  regular: 'Source_Han_Sans_SC_Regular.otf',
-  bold: 'Source_Han_Sans_SC_Bold.otf',
+  regular: 'Source_Han_Sans_SC_Regular.woff',
+  bold: 'Source_Han_Sans_SC_Bold.woff',
 } as const
 
 export type FontWeight = keyof typeof FONT_FILES

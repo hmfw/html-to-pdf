@@ -5,8 +5,8 @@
 库需要字体文件才能渲染中文。**默认情况下，库会尝试从 `/fonts/` 路径加载思源黑体**：
 
 ```text
-/fonts/Source_Han_Sans_SC_Regular.otf
-/fonts/Source_Han_Sans_SC_Bold.otf
+/fonts/Source_Han_Sans_SC_Regular.woff
+/fonts/Source_Han_Sans_SC_Bold.woff
 ```
 
 **你需要将字体文件放到应用的 `public/fonts/` 目录**，或通过 `fontPaths` 选项指定其他路径。
@@ -80,8 +80,8 @@ await htmlToPdf(element, {
 // 应用部署在 /app/ 子目录
 await htmlToPdf(element, {
   fontPaths: {
-    regular: '/app/fonts/Source_Han_Sans_SC_Regular.otf',
-    bold: '/app/fonts/Source_Han_Sans_SC_Bold.otf'
+    regular: '/app/fonts/Source_Han_Sans_SC_Regular.woff',
+    bold: '/app/fonts/Source_Han_Sans_SC_Bold.woff'
   }
 })
 ```
@@ -138,8 +138,8 @@ const FONT_BASE_URL = import.meta.env.VITE_FONT_URL || '/fonts'
 
 await htmlToPdf(element, {
   fontPaths: {
-    regular: `${FONT_BASE_URL}/Source_Han_Sans_SC_Regular.otf`,
-    bold: `${FONT_BASE_URL}/Source_Han_Sans_SC_Bold.otf`
+    regular: `${FONT_BASE_URL}/Source_Han_Sans_SC_Regular.woff`,
+    bold: `${FONT_BASE_URL}/Source_Han_Sans_SC_Bold.woff`
   }
 })
 ```
@@ -160,8 +160,8 @@ VITE_FONT_URL=https://cdn.example.com/fonts
 ```typescript
 const fontPresets = {
   sansSerif: {
-    regular: '/fonts/Source_Han_Sans_SC_Regular.otf',
-    bold: '/fonts/Source_Han_Sans_SC_Bold.otf'
+    regular: '/fonts/Source_Han_Sans_SC_Regular.woff',
+    bold: '/fonts/Source_Han_Sans_SC_Bold.woff'
   },
   serif: {
     regular: '/fonts/SourceHanSerif-Regular.otf',
@@ -188,11 +188,12 @@ await htmlToPdf(element, {
 
 ### 支持的格式
 
-✅ `.otf`（OpenType Font）— **推荐**  
+✅ `.otf`（OpenType Font）  
 ✅ `.ttf`（TrueType Font）  
-❌ `.woff` / `.woff2`（Web 字体格式，不支持）
+✅ `.woff`（Web Open Font Format）— **推荐用于 Web**  
+❌ `.woff2`（需转换为上述格式）
 
-如果只有 `.woff2` 文件，需要转换为 `.otf` 或 `.ttf`：
+如果只有 `.woff2` 文件，需要转换为支持的格式：
 - 在线转换：[CloudConvert](https://cloudconvert.com/woff2-to-otf)
 - 本地转换：使用 [fonttools](https://github.com/fonttools/fonttools)
 
@@ -277,8 +278,8 @@ location /fonts/ {
 ```typescript
 await htmlToPdf(element, {
   fontPaths: {
-    regular: '/fonts/SourceHanSansHK-Regular.otf',  // 香港繁体字库
-    bold: '/fonts/SourceHanSansHK-Bold.otf'
+    regular: '/fonts/SourceHanSansHK-Regular.woff',  // 香港繁体字库
+    bold: '/fonts/SourceHanSansHK-Bold.woff'
   },
   converterOptions: { from: 'cn', to: 'hk' },  // 简体→香港繁体
   fontFallback: false  // 可选：关闭后备字体，完全依赖转换
@@ -287,8 +288,8 @@ await htmlToPdf(element, {
 // 或台湾繁体
 await htmlToPdf(element, {
   fontPaths: {
-    regular: '/fonts/SourceHanSansTC-Regular.otf',  // 台湾繁体字库
-    bold: '/fonts/SourceHanSansTC-Bold.otf'
+    regular: '/fonts/SourceHanSansTC-Regular.woff',  // 台湾繁体字库
+    bold: '/fonts/SourceHanSansTC-Bold.woff'
   },
   converterOptions: { from: 'cn', to: 'tw' },  // 简体→台湾繁体
   fontFallback: false
@@ -420,7 +421,7 @@ await htmlToPdf(element, {
 ✅ 自动字体子集化，无需手动处理  
 ✅ 只覆盖需要改的路径，其余使用默认值  
 ⚠️ 注意字体授权和 CORS 问题  
-⚠️ 仅支持 `.otf` 和 `.ttf` 格式
+⚠️ 支持 `.otf`、`.ttf`、`.woff` 格式
 
 **API 设计原则**：
 - 简洁：只需传递路径字符串

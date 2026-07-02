@@ -50,8 +50,8 @@ import { PDF_CONTAINER_ATTR, PDF_PAGE_ATTR } from '@hmfw/html-to-pdf'
 
 确保以下文件可通过 `/fonts/` 路径访问：
 
-- `Source_Han_Sans_SC_Regular.otf`（必需）
-- `Source_Han_Sans_SC_Bold.otf`（必需）
+- `Source_Han_Sans_SC_Regular.woff`（必需）
+- `Source_Han_Sans_SC_Bold.woff`（必需）
 
 或通过 `options.fontPaths` 指定 CDN 或自定义路径。详见 [字体配置](../README.md#字体配置)。
 
