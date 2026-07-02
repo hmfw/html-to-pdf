@@ -2,10 +2,7 @@
 
 ## 概述
 
-当使用繁体中文字库（如思源黑体繁体版）导出包含简体字的内容时，或使用简体字库导出包含繁体字的内容时，会因为字库缺失字符而导致：
-
-1. 字符显示为方块（缺失字形）
-2. 需要额外加载后备字体（增加文件大小和加载时间）
+当使用繁体中文字库（如思源黑体繁体版）导出包含简体字的内容时，或使用简体字库导出包含繁体字的内容时，会因为字库缺失字符而导致字符显示为方块(缺失字形）。
 
 为解决这个问题，库集成了 `opencc-js` 进行字符转换。配置后，遇到字库中不存在的字符时，会自动按配置转换（如简体→繁体），使用转换后的字形渲染。
 
@@ -26,8 +23,7 @@ await htmlToPdf(element, {
     regular: '/fonts/SourceHanSansHK-Regular.woff',  // 香港繁体字库
     bold: '/fonts/SourceHanSansHK-Bold.woff'
   },
-  converterOptions: { from: 'cn', to: 'hk' },  // 简体→香港繁体
-  fontFallback: false  // 可选：关闭后备字体，完全依赖转换
+  converterOptions: { from: 'cn', to: 'hk' }  // 简体→香港繁体
 })
 ```
 

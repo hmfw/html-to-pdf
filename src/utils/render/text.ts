@@ -15,10 +15,8 @@ import { getStyle } from './layoutCache.js'
  * 根据字重选择合适的字体。
  * 中英文统一走子集化的思源黑体（子集已包含页面用到的拉丁字符），
  * 保证中英文混排时字形一致；仅在子集字体缺失时回退到内置 Helvetica。
- *
- * 如果提供了后备字体（fallbackFont），会根据字符是否在主字体中存在来选择字体。
  */
-export function selectFont(ctx: RenderContext, fontWeight: string | number, char?: string): PDFFont {
+export function selectFont(ctx: RenderContext, fontWeight: string | number): PDFFont {
   // 解析字重（处理字符串和数字）
   let weight = 400
   if (typeof fontWeight === 'string') {
@@ -37,18 +35,6 @@ export function selectFont(ctx: RenderContext, fontWeight: string | number, char
   // 600 及以上（Semi-bold、Bold、Extra-bold、Black）使用 Bold 字体
   // 理由：库只有 Regular / Bold 两个字重，600+ 视觉上更接近粗体
   const isBold = weight >= 600
-
-  // 如果提供了字符且该字符在缺失列表中，使用后备字体
-  if (char && ctx.missingChars?.has(char)) {
-    const fallback = isBold
-      ? (ctx.fallbackFontBold ?? ctx.fallbackFont)
-      : ctx.fallbackFont
-
-    // 如果后备字体存在，使用后备字体；否则降级到主字体（会显示为方块）
-    if (fallback) {
-      return fallback
-    }
-  }
 
   // 使用主字体
   const mainFont = isBold
@@ -86,61 +72,36 @@ type RenderWithFallbackOptions = {
 }
 
 /**
- * 渲染文本，根据每个字符是否在主字体中存在，动态选择主字体或后备字体。
- * 支持简繁转换：当字符有映射时（繁体字库遇到简体字），使用映射后的繁体字符。
- * 将相邻使用相同字体的字符合并为段，减少 drawText 调用次数。
+ * 渲染文本，支持字符映射（简繁转换）。
+ * 当字符有映射时（如繁体字库遇到简体字），使用映射后的繁体字符。
+ * 将相邻字符合并为段，减少 drawText 调用次数。
  */
 function renderTextWithFallback(page: PDFPage, text: string, opts: RenderWithFallbackOptions): void {
   const { x, y, size, fontWeight, color, italic, letterSpacing, ctx } = opts
   const chars = Array.from(text) // 处理代理对
-  let currentX = x
-  let segmentText = ''
-  let segmentFont: PDFFont | null = null
 
   // 根据字重选择简繁映射表
   const weight = typeof fontWeight === 'number' ? fontWeight : (fontWeight === 'bold' || fontWeight === 'bolder' ? 700 : 400)
   const isBold = weight >= 600
   const charMap = isBold ? ctx.charMapBold : ctx.charMapRegular
 
-  const flushSegment = () => {
-    if (segmentText && segmentFont) {
-      const drawnWidth = drawStyledText(page, segmentText, {
-        x: currentX,
-        y,
-        size,
-        font: segmentFont,
-        color,
-        italic,
-        letterSpacing,
-      })
-      // 使用 drawStyledText 返回的实际宽度（已包含 letterSpacing）
-      currentX += drawnWidth
-      segmentText = ''
-    }
+  // 如果没有字符映射，直接绘制整段文本
+  if (!charMap) {
+    const font = selectFont(ctx, fontWeight)
+    drawStyledText(page, text, { x, y, size, font, color, italic, letterSpacing })
+    return
   }
+
+  // 有字符映射时，逐字符处理并合并相邻字符
+  let mappedText = ''
 
   for (const char of chars) {
-    // 如果有简繁映射，使用映射后的繁体字符
-    const actualChar = charMap?.get(char) ?? char
-
-    // 调试：如果发生了映射，打印一次（仅第一个字符）
-    if (actualChar !== char && chars.indexOf(char) === 0) {
-      console.debug(`[html-to-pdf] 字符映射示例: '${char}' → '${actualChar}'`)
-    }
-
-    const font = selectFont(ctx, fontWeight, char)
-
-    // 如果字体改变，先绘制当前段，再开始新段
-    if (segmentFont && font !== segmentFont) {
-      flushSegment()
-    }
-
-    segmentFont = font
-    segmentText += actualChar  // 使用映射后的字符
+    // 使用映射后的字符
+    mappedText += charMap.get(char) ?? char
   }
 
-  // 绘制最后一段
-  flushSegment()
+  const font = selectFont(ctx, fontWeight)
+  drawStyledText(page, mappedText, { x, y, size, font, color, italic, letterSpacing })
 }
 
 /**
@@ -319,7 +280,7 @@ function measureVisualLines(textNode: Text): MeasuredLine[] {
 /**
  * 渲染文本节点（基于 Range 精确定位）
  *
- * 如果存在后备字体且有缺失字符，会将文本拆分为不同字体段分别渲染。
+ * 如果存在字符映射（简繁转换），会逐字符渲染并应用映射。
  */
 export function renderTextNode(ctx: RenderContext, textNode: Text, parentElement: HTMLElement): void {
   const text = textNode.textContent?.trim()
@@ -349,14 +310,8 @@ export function renderTextNode(ctx: RenderContext, textNode: Text, parentElement
     ? pxToPt(parseFloat(letterSpacingPx))
     : 0
 
-  // 检查是否需要使用后备字体（有缺失字符且后备字体存在）
-  const needsFallback = !!(ctx.missingChars && ctx.missingChars.size > 0 && ctx.fallbackFont)
-
   // 检查是否需要字符映射（简繁转换）
   const needsCharMapping = !!(ctx.charMapRegular || ctx.charMapBold)
-
-  // 如果需要后备字体或字符映射，使用逐字符渲染
-  const needsCharByCharRendering = needsFallback || needsCharMapping
 
   // 检查是否在 <pre> 标签内（需要保留换行符）
   let isPreformatted = false
@@ -384,8 +339,8 @@ export function renderTextNode(ctx: RenderContext, textNode: Text, parentElement
       const lineY = ctx.pageHeight - pxToPt(rect.top - pageRect.top) - firstBaseline - index * lineHeight
 
       try {
-        if (needsCharByCharRendering) {
-          // 需要后备字体或字符映射：逐字符渲染
+        if (needsCharMapping) {
+          // 需要字符映射：逐字符渲染
           renderTextWithFallback(page, line, {
             x: pxToPt(rect.left - ctx.containerRect.left),
             y: lineY,
@@ -398,7 +353,7 @@ export function renderTextNode(ctx: RenderContext, textNode: Text, parentElement
             ctx,
           })
         } else {
-          // 不需要后备字体：整行渲染
+          // 不需要字符映射：整行渲染
           drawStyledText(page, line, {
             x: pxToPt(rect.left - ctx.containerRect.left),
             y: lineY,
@@ -450,8 +405,8 @@ export function renderTextNode(ctx: RenderContext, textNode: Text, parentElement
       const baselineY =
         ctx.pageHeight - pxToPt(line.top - pageRect.top) - baselineFromTop(defaultFont, fontSize, pxToPt(line.height))
       try {
-        if (needsCharByCharRendering) {
-          // 需要后备字体或字符映射：逐字符渲染
+        if (needsCharMapping) {
+          // 需要字符映射：逐字符渲染
           renderTextWithFallback(page, line.text, {
             x,
             y: baselineY,
@@ -464,7 +419,7 @@ export function renderTextNode(ctx: RenderContext, textNode: Text, parentElement
             ctx,
           })
         } else {
-          // 不需要后备字体：整行渲染
+          // 不需要字符映射：整行渲染
           drawStyledText(page, line.text, {
             x,
             y: baselineY,

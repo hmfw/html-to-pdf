@@ -459,10 +459,11 @@ async function handleExport() {
   try {
     const result = await htmlToPdf(pdfContainer.value, {
       filename: 'comprehensive-demo',
-      // fontPaths: {
-      //   regular: '/public/fonts/AlibabaSansHK-55.woff',
-      //   bold: '/public/fonts/AlibabaSansHK-75.woff',
-      // },
+      // fontSubset: false,
+      fontPaths: {
+        regular: '/public/fonts/AlibabaSansHK-55.woff',
+        bold: '/public/fonts/AlibabaSansHK-75.woff',
+      },
       // converterOptions: {
       //   from: 'cn',
       //   to: 'hk',

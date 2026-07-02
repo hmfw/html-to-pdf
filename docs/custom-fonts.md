@@ -273,7 +273,7 @@ location /fonts/ {
 
 有以下解决方案：
 
-**方案 1：启用转换（推荐）**
+**方案 1：启用字符转换（推荐）**
 
 ```typescript
 await htmlToPdf(element, {
@@ -281,8 +281,7 @@ await htmlToPdf(element, {
     regular: '/fonts/SourceHanSansHK-Regular.woff',  // 香港繁体字库
     bold: '/fonts/SourceHanSansHK-Bold.woff'
   },
-  converterOptions: { from: 'cn', to: 'hk' },  // 简体→香港繁体
-  fontFallback: false  // 可选：关闭后备字体，完全依赖转换
+  converterOptions: { from: 'cn', to: 'hk' }  // 简体→香港繁体
 })
 
 // 或台湾繁体
@@ -291,8 +290,7 @@ await htmlToPdf(element, {
     regular: '/fonts/SourceHanSansTC-Regular.woff',  // 台湾繁体字库
     bold: '/fonts/SourceHanSansTC-Bold.woff'
   },
-  converterOptions: { from: 'cn', to: 'tw' },  // 简体→台湾繁体
-  fontFallback: false
+  converterOptions: { from: 'cn', to: 'tw' }  // 简体→台湾繁体
 })
 ```
 
@@ -302,23 +300,9 @@ await htmlToPdf(element, {
 - `{ from: 'cn', to: 'twp' }`：简体→台湾繁体（含成语）
 - `{ from: 'tw', to: 'cn' }`：繁体→简体（反向转换）
 
-简体字（如"简体字"）会自动转换为繁体（"簡體字"）并使用繁体字库渲染，无需加载额外字体。详见 [转换文档](converter.md)。
+简体字（如"简体字"）会自动转换为繁体（"簡體字"）并使用繁体字库渲染。转换失败的字符会显示为方块。详见 [转换文档](converter.md)。
 
-**方案 2：使用后备字体**
-
-```typescript
-await htmlToPdf(element, {
-  fontPaths: {
-    regular: '/fonts/SourceHanSansTC-Regular.otf',
-    bold: '/fonts/SourceHanSansTC-Bold.otf'
-  },
-  fontFallback: true  // 默认开启：缺失字符使用思源黑体简体补充
-})
-```
-
-需要同时托管思源黑体简体版，缺失字符会按需加载后备字体。
-
-**方案 3：使用通用字库**
+**方案 2：使用通用字库**
 
 使用同时包含简繁体的字体（如 Noto Sans CJK），避免缺字问题。
 

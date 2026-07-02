@@ -65,20 +65,17 @@ export function extractUsedCharacters(element: HTMLElement): Set<string> {
  *
  * @param fontBuffer 已加载的完整字体 ArrayBuffer（加载/降级逻辑见 fontLoader）
  * @param characters 需要保留的字符集合
- * @param warnMissing 是否对缺失字符输出警告（主字体为 true，后备字体为 false）
+ * @param warnMissing 是否对缺失字符输出警告（主字体为 true）
  * @param conversionConfig OpenCC 转换配置（如 { from: 'cn', to: 'hk' }），undefined 表示不转换
- * @param hasFallback 是否有后备字体（用于准确的警告信息）
- * @returns 子集字体 ArrayBuffer、缺失的字符列表和字符映射表（原始→转换后）
+ * @returns 子集字体 ArrayBuffer 和字符映射表（原始→转换后）
  */
 export async function createFontSubset(
   fontBuffer: ArrayBuffer,
   characters: Set<string>,
   warnMissing: boolean = true,
-  conversionConfig?: OpenCCConfig,
-  hasFallback: boolean = false
+  conversionConfig?: OpenCCConfig
 ): Promise<{
   buffer: ArrayBuffer
-  missingChars: string[]
   charMap?: Map<string, string>  // 原始字符→转换后字符映射
 }> {
   const font = opentype.parse(fontBuffer) as any
@@ -91,7 +88,6 @@ export async function createFontSubset(
   const glyphIds = new Set<number>()
   glyphIds.add(0)
 
-  const missingChars: string[] = []  // 所有缺失的字符（用于后备字体）
   const convertFailedChars: string[] = []  // 转换失败的字符（用于警告）
   const charMap = new Map<string, string>()  // 原始字符→转换后字符映射
 
@@ -124,15 +120,10 @@ export async function createFontSubset(
         }
       }
 
-      // 如果转换未解决，记录为缺失字符
+      // 如果转换未解决，记录为转换失败（用于警告）
       if (!resolved) {
-        // 只有"需要转换的字符"才记录为缺失（用于后备字体）
-        // 如果配置了转换但字符无需转换（如特殊符号），不使用后备字体
-        if (!conversionConfig || hasConversion) {
-          missingChars.push(char)
-        }
-
-        // 只有"尝试转换但失败"的字符才记录为转换失败（用于警告）
+        // 只有"尝试转换但失败"的字符才记录为转换失败
+        // 如果配置了转换但字符无需转换（如特殊符号），不打印警告
         if (!conversionConfig || hasConversion) {
           convertFailedChars.push(char)
         }
@@ -147,9 +138,8 @@ export async function createFontSubset(
       return `'${ch}' (U+${code})`
     })
     const configInfo = conversionConfig ? `（已尝试转换 ${conversionConfig.from} → ${conversionConfig.to}）` : ''
-    const fallbackInfo = hasFallback ? '，将使用后备字体' : ''
     console.warn(
-      `[html-to-pdf] 以下 ${convertFailedChars.length} 个字符在字体 ${familyName} ${styleName} 中不存在${configInfo}${fallbackInfo}：\n` +
+      `[html-to-pdf] 以下 ${convertFailedChars.length} 个字符在字体 ${familyName} ${styleName} 中不存在${configInfo}，将显示为方块\n` +
         displayChars.join(', ') +
         (convertFailedChars.length > 20 ? `\n... 及其他 ${convertFailedChars.length - 20} 个字符` : '')
     )
@@ -177,7 +167,6 @@ export async function createFontSubset(
 
   return {
     buffer: subsetFont.toArrayBuffer(),
-    missingChars,  // 返回所有缺失字符（包括特殊符号），用于后备字体
     charMap: charMap.size > 0 ? charMap : undefined
   }
 }
@@ -186,9 +175,7 @@ export async function createFontSubset(
  * 为 HTML 元素创建字体子集映射
  *
  * @param element 待扫描的元素
- * @param fontBuffers 各字重已加载的完整字体 ArrayBuffer（加载/降级见 fontLoader）。
- *   后备字体改为惰性加载器 `loadFallback`：仅当检测到主字体缺字时才调用，
- *   实现按需加载——自定义字体完整覆盖所用字符时，根本不会下载后备字体。
+ * @param fontBuffers 各字重已加载的完整字体 ArrayBuffer（加载/降级见 fontLoader）
  * @param conversionConfig OpenCC 转换配置（如 { from: 'cn', to: 'hk' }），undefined 表示不转换
  */
 export async function createFontSubsetsForElement(
@@ -197,32 +184,21 @@ export async function createFontSubsetsForElement(
     regular?: ArrayBuffer
     bold?: ArrayBuffer
     medium?: ArrayBuffer
-    /** 惰性加载后备字体（思源黑体）。仅在主字体缺字时调用一次。 */
-    loadFallback?: () => Promise<{ regular?: ArrayBuffer; bold?: ArrayBuffer }>
   },
   conversionConfig?: OpenCCConfig
 ): Promise<{
   regular?: ArrayBuffer
   bold?: ArrayBuffer
   medium?: ArrayBuffer
-  fallbackRegular?: ArrayBuffer
-  fallbackBold?: ArrayBuffer
-  missingChars?: Set<string>  // 新增：主字体中缺失的字符集合
   charMapRegular?: Map<string, string>  // Regular 字体简繁映射
   charMapBold?: Map<string, string>  // Bold 字体简繁映射
 }> {
   const characters = extractUsedCharacters(element)
 
-  // 检查是否有后备字体
-  const hasFallback = !!fontBuffers.loadFallback
-
   const subsets: {
     regular?: ArrayBuffer
     bold?: ArrayBuffer
     medium?: ArrayBuffer
-    fallbackRegular?: ArrayBuffer
-    fallbackBold?: ArrayBuffer
-    missingChars?: Set<string>
     charMapRegular?: Map<string, string>
     charMapBold?: Map<string, string>
   } = {}
@@ -230,16 +206,12 @@ export async function createFontSubsetsForElement(
   // 并行创建所有字体子集
   const tasks: Promise<void>[] = []
 
-  // 创建主字体子集，如果有缺失字符，记录到 missingInPrimary
-  const missingInPrimary = new Set<string>()
-
   if (fontBuffers.regular) {
     tasks.push(
-      createFontSubset(fontBuffers.regular, characters, true, conversionConfig, hasFallback)
-        .then(({ buffer, missingChars, charMap }) => {
+      createFontSubset(fontBuffers.regular, characters, true, conversionConfig)
+        .then(({ buffer, charMap }) => {
           subsets.regular = buffer
           subsets.charMapRegular = charMap
-          missingChars.forEach((ch) => missingInPrimary.add(ch))
         })
         .catch((err) => {
           console.warn('Regular 字体子集创建失败:', err)
@@ -249,7 +221,7 @@ export async function createFontSubsetsForElement(
 
   if (fontBuffers.bold) {
     tasks.push(
-      createFontSubset(fontBuffers.bold, characters, true, conversionConfig, hasFallback)
+      createFontSubset(fontBuffers.bold, characters, true, conversionConfig)
         .then(({ buffer, charMap }) => {
           subsets.bold = buffer
           subsets.charMapBold = charMap
@@ -262,7 +234,7 @@ export async function createFontSubsetsForElement(
 
   if (fontBuffers.medium) {
     tasks.push(
-      createFontSubset(fontBuffers.medium, characters, true, conversionConfig, hasFallback)
+      createFontSubset(fontBuffers.medium, characters, true, conversionConfig)
         .then(({ buffer }) => {
           subsets.medium = buffer
         })
@@ -273,49 +245,6 @@ export async function createFontSubsetsForElement(
   }
 
   await Promise.all(tasks)
-
-  // 主字体有缺失字符且提供了后备字体加载器时，才下载后备字体并子集化（只含缺失字符）。
-  // 这是按需加载：自定义字体完整时不会触发下载，节省一次 16-17MB 的字体请求。
-  if (missingInPrimary.size > 0 && fontBuffers.loadFallback) {
-    // 根据是否配置了转换，显示不同的日志信息
-    const message = conversionConfig
-      ? `[html-to-pdf] 主字体缺少 ${missingInPrimary.size} 个字符，已尝试转换（${conversionConfig.from} → ${conversionConfig.to}）但转换后仍缺失，加载后备字体（思源黑体）补充`
-      : `[html-to-pdf] 主字体缺少 ${missingInPrimary.size} 个字符，加载后备字体（思源黑体）补充`
-    console.info(message)
-
-    // 保存缺失字符集合，供渲染时判断使用
-    subsets.missingChars = missingInPrimary
-
-    const fallback = await fontBuffers.loadFallback()
-
-    const fallbackTasks: Promise<void>[] = []
-
-    if (fallback.regular) {
-      fallbackTasks.push(
-        createFontSubset(fallback.regular, missingInPrimary, false)
-          .then(({ buffer }) => {
-            subsets.fallbackRegular = buffer
-          })
-          .catch((err) => {
-            console.warn('后备字体 Regular 子集创建失败:', err)
-          })
-      )
-    }
-
-    if (fallback.bold) {
-      fallbackTasks.push(
-        createFontSubset(fallback.bold, missingInPrimary, false)
-          .then(({ buffer }) => {
-            subsets.fallbackBold = buffer
-          })
-          .catch((err) => {
-            console.warn('后备字体 Bold 子集创建失败:', err)
-          })
-      )
-    }
-
-    await Promise.all(fallbackTasks)
-  }
 
   return subsets
 }

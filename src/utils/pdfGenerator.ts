@@ -195,21 +195,14 @@ async function embedChineseFonts(
   subset: boolean,
   monitor: PerformanceMonitor,
   timeout: number = 30000,
-  enableFallback: boolean = true,
   basePath: string = '/',
   converterOptions: PdfExportOptions['converterOptions'],
 ): Promise<{
   regular: PDFFont
   bold?: PDFFont
-  fallbackRegular?: PDFFont
-  fallbackBold?: PDFFont
-  missingChars?: Set<string>
   charMapRegular?: Map<string, string>
   charMapBold?: Map<string, string>
 }> {
-  // 判断是否使用自定义字体
-  const hasCustomFont = !!(customFontPaths?.regular || customFontPaths?.bold)
-
   // 始终加载 Regular 和 Bold 两个字重。Regular 必需，Bold 失败时降级为无粗体。
   const [regularBuf, boldBuf] = await Promise.all([
     loadFontWithFallback('regular', customFontPaths?.regular, timeout, basePath),
@@ -220,46 +213,19 @@ async function embedChineseFonts(
   ])
   monitor.mark('加载主字体')
 
-  // 后备字体（思源黑体）惰性加载器：仅在使用自定义字体且启用后备时可用。
-  // 子集化路径下，只有真正检测到缺字才会调用它去下载，自定义字体完整时零额外流量。
-  const loadFallback =
-    hasCustomFont && enableFallback
-      ? async () => {
-          const [regular, bold] = await Promise.all([
-            loadFontWithFallback('regular', undefined, timeout, basePath).catch((err) => {
-              console.warn('[html-to-pdf] 后备字体 Regular 加载失败:', err)
-              return undefined
-            }),
-            loadFontWithFallback('bold', undefined, timeout, basePath).catch((err) => {
-              console.warn('[html-to-pdf] 后备字体 Bold 加载失败:', err)
-              return undefined
-            }),
-          ])
-          monitor.mark('加载后备字体（思源黑体）')
-          return { regular, bold }
-        }
-      : undefined
-
-  // 不子集化：无法预知缺字，若需后备则只能预先加载完整后备字体一并嵌入。
+  // 不子集化：直接嵌入完整字体
   if (!subset) {
-    const fallback = loadFallback ? await loadFallback() : { regular: undefined, bold: undefined }
     const regular = await pdfDoc.embedFont(regularBuf, { subset: false })
     const bold = boldBuf ? await pdfDoc.embedFont(boldBuf, { subset: false }) : undefined
-    const fallbackRegular = fallback.regular
-      ? await pdfDoc.embedFont(fallback.regular, { subset: false })
-      : undefined
-    const fallbackBold = fallback.bold ? await pdfDoc.embedFont(fallback.bold, { subset: false }) : undefined
-    monitor.mark('嵌入完整字体')
-
-    return { regular, bold, fallbackRegular, fallbackBold }
+    return { regular, bold }
   }
 
+  // 子集化：扫描内容并创建字体子集
   const subsets = await createFontSubsetsForElement(
     element,
     {
       regular: regularBuf,
       bold: boldBuf,
-      loadFallback,
     },
     converterOptions
   )
@@ -271,16 +237,11 @@ async function embedChineseFonts(
 
   const regular = await pdfDoc.embedFont(subsets.regular)
   const bold = subsets.bold ? await pdfDoc.embedFont(subsets.bold) : undefined
-  const fallbackRegular = subsets.fallbackRegular ? await pdfDoc.embedFont(subsets.fallbackRegular) : undefined
-  const fallbackBold = subsets.fallbackBold ? await pdfDoc.embedFont(subsets.fallbackBold) : undefined
   monitor.mark('嵌入子集字体')
 
   return {
     regular,
     bold,
-    fallbackRegular,
-    fallbackBold,
-    missingChars: subsets.missingChars,
     charMapRegular: subsets.charMapRegular,
     charMapBold: subsets.charMapBold,
   }
@@ -313,7 +274,6 @@ export async function htmlToPdf(element: HTMLElement, options: PdfExportOptions 
       subset,
       monitor,
       options.fontLoadTimeout ?? 30000,
-      options.fontFallback ?? true,
       options.basePath ?? '/',
       options.converterOptions,
     )
@@ -343,11 +303,8 @@ export async function htmlToPdf(element: HTMLElement, options: PdfExportOptions 
       latinFontBold,
       chineseFont: chineseFonts.regular,
       chineseFontBold: chineseFonts.bold,
-      fallbackFont: chineseFonts.fallbackRegular,
-      fallbackFontBold: chineseFonts.fallbackBold,
-      missingChars: chineseFonts.missingChars,  // 新增：传递缺失字符集合
-      charMapRegular: chineseFonts.charMapRegular,  // 新增：传递简繁映射
-      charMapBold: chineseFonts.charMapBold,  // 新增：传递简繁映射
+      charMapRegular: chineseFonts.charMapRegular,
+      charMapBold: chineseFonts.charMapBold,
       containerRect,
       pageHeight: finalPageSize.height,
       pageWidth: finalPageSize.width,

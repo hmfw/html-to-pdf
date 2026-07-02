@@ -42,7 +42,7 @@ import { PDF_CONTAINER_ATTR, PDF_PAGE_ATTR } from '@hmfw/html-to-pdf'
 
 ### 配置方法
 
-从 `node_modules/@hmfw/html-to-pdf/public/fonts/` 复制字体到应用静态资源目录：
+从 [GitHub 仓库](https://github.com/hmfw/html-to-pdf/tree/main/public/fonts) 下载字体文件到应用静态资源目录：
 
 - Vite / CRA：放到 `public/fonts/`
 - Next.js：放到 `public/fonts/`
@@ -72,8 +72,7 @@ export function Report() {
     setStatus('processing')
     const result = await htmlToPdf(contentRef.current, {
       filename: 'report',
-      pageSize: 'A4',
-      margin: 40
+      pageSize: 'A4'
     })
     // PDF 已自动下载
     if (result.success) {

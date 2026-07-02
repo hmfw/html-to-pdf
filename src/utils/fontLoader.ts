@@ -100,7 +100,7 @@ export async function loadFontWithFallback(
       : `字体加载失败（${weight}）：\n${url} → ${(err as Error).message}\n\n` +
         `请确保字体文件已放置在应用的 public/fonts/ 目录，或通过 options.fontPaths.${weight} 指定可访问的 URL。\n` +
         `若应用部署在子路径下（非根目录），请通过 options.basePath 传入部署基础路径（如 Vite 的 import.meta.env.BASE_URL）。\n` +
-        `需要的字体文件可从 node_modules/@hmfw/html-to-pdf/public/fonts/ 复制。`
+        `字体文件可从 GitHub 仓库下载：https://github.com/hmfw/html-to-pdf/tree/main/public/fonts`
 
     throw new Error(errorMsg)
   }
