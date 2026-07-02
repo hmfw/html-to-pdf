@@ -70,6 +70,7 @@ type DrawTextOptions = {
   italic: boolean
   maxWidth?: number
   lineHeight?: number
+  letterSpacing?: number
 }
 
 type RenderWithFallbackOptions = {
@@ -80,6 +81,7 @@ type RenderWithFallbackOptions = {
   color: ReturnType<typeof rgb>
   italic: boolean
   lineHeight?: number
+  letterSpacing?: number
   ctx: RenderContext
 }
 
@@ -89,7 +91,7 @@ type RenderWithFallbackOptions = {
  * 将相邻使用相同字体的字符合并为段，减少 drawText 调用次数。
  */
 function renderTextWithFallback(page: PDFPage, text: string, opts: RenderWithFallbackOptions): void {
-  const { x, y, size, fontWeight, color, italic, ctx } = opts
+  const { x, y, size, fontWeight, color, italic, letterSpacing, ctx } = opts
   const chars = Array.from(text) // 处理代理对
   let currentX = x
   let segmentText = ''
@@ -102,17 +104,17 @@ function renderTextWithFallback(page: PDFPage, text: string, opts: RenderWithFal
 
   const flushSegment = () => {
     if (segmentText && segmentFont) {
-      drawStyledText(page, segmentText, {
+      const drawnWidth = drawStyledText(page, segmentText, {
         x: currentX,
         y,
         size,
         font: segmentFont,
         color,
         italic,
+        letterSpacing,
       })
-      // 计算当前段的宽度，更新 x 坐标
-      const segmentWidth = segmentFont.widthOfTextAtSize(segmentText, size)
-      currentX += segmentWidth
+      // 使用 drawStyledText 返回的实际宽度（已包含 letterSpacing）
+      currentX += drawnWidth
       segmentText = ''
     }
   }
@@ -142,27 +144,62 @@ function renderTextWithFallback(page: PDFPage, text: string, opts: RenderWithFal
 }
 
 /**
- * 绘制文本，支持用 skew 变换模拟斜体。
+ * 绘制文本，支持用 skew 变换模拟斜体，支持 letter-spacing 字符间距。
  * skew 绕坐标原点进行，故先把变换原点平移到基线 (x, y) 再倾斜，避免文字水平错位。
+ *
+ * @returns 返回绘制文本的总宽度（pt），包含 letter-spacing
  */
-function drawStyledText(page: PDFPage, text: string, opts: DrawTextOptions): void {
-  const { x, y, italic, ...rest } = opts
-  if (!italic) {
-    page.drawText(text, { x, y, ...rest })
-    return
+function drawStyledText(page: PDFPage, text: string, opts: DrawTextOptions): number {
+  const { x, y, italic, font, size, letterSpacing, ...rest } = opts
+
+  // 如果没有 letter-spacing 或为 0，使用原有的整段绘制逻辑
+  if (!letterSpacing || letterSpacing === 0) {
+    if (!italic) {
+      page.drawText(text, { x, y, font, size, ...rest })
+    } else {
+      const tan = Math.tan((ITALIC_SKEW_DEGREES * Math.PI) / 180)
+      page.pushOperators(
+        pushGraphicsState(),
+        concatTransformationMatrix(1, 0, 0, 1, x, y),
+        concatTransformationMatrix(1, 0, tan, 1, 0, 0),
+        concatTransformationMatrix(1, 0, 0, 1, -x, -y),
+      )
+      page.drawText(text, { x, y, font, size, ...rest })
+      page.pushOperators(popGraphicsState())
+    }
+    return font.widthOfTextAtSize(text, size)
   }
 
-  const tan = Math.tan((ITALIC_SKEW_DEGREES * Math.PI) / 180)
-  page.pushOperators(
-    pushGraphicsState(),
-    // 平移到基线 → 水平 skew（矩阵 c = tan）→ 平移回原点
-    concatTransformationMatrix(1, 0, 0, 1, x, y),
-    concatTransformationMatrix(1, 0, tan, 1, 0, 0),
-    concatTransformationMatrix(1, 0, 0, 1, -x, -y),
-  )
-  
-  page.drawText(text, { x, y, ...rest })
-  page.pushOperators(popGraphicsState())
+  // 有 letter-spacing：逐字符绘制
+  const chars = Array.from(text)
+  let currentX = x
+  const tan = italic ? Math.tan((ITALIC_SKEW_DEGREES * Math.PI) / 180) : 0
+
+  for (let i = 0; i < chars.length; i++) {
+    const char = chars[i]
+    const charWidth = font.widthOfTextAtSize(char, size)
+
+    if (!italic) {
+      page.drawText(char, { x: currentX, y, font, size, ...rest })
+    } else {
+      page.pushOperators(
+        pushGraphicsState(),
+        concatTransformationMatrix(1, 0, 0, 1, currentX, y),
+        concatTransformationMatrix(1, 0, tan, 1, 0, 0),
+        concatTransformationMatrix(1, 0, 0, 1, -currentX, -y),
+      )
+      page.drawText(char, { x: currentX, y, font, size, ...rest })
+      page.pushOperators(popGraphicsState())
+    }
+
+    // 字符宽度 + letter-spacing（最后一个字符后不加间距）
+    currentX += charWidth
+    if (i < chars.length - 1) {
+      currentX += letterSpacing
+    }
+  }
+
+  return currentX - x
 }
 
 /**
@@ -225,7 +262,28 @@ function measureVisualLines(textNode: Text): MeasuredLine[] {
 
   const flush = (startOff: number, endOff: number, rect: DOMRect) => {
     const t = content.slice(startOff, endOff)
-    if (t.trim()) lines.push({ text: t, left: rect.left, top: rect.top, width: rect.width, height: rect.height })
+    const trimmed = t.trim()
+    if (trimmed) {
+      // 计算前导空格占用的宽度，调整 left 坐标
+      const leadingSpaces = t.length - t.trimStart().length
+      let adjustedLeft = rect.left
+
+      // 如果有前导空格，用 Range 测量它们的宽度并调整起始坐标
+      if (leadingSpaces > 0) {
+        range.setStart(textNode, startOff)
+        range.setEnd(textNode, startOff + leadingSpaces)
+        const spacesRect = range.getBoundingClientRect()
+        adjustedLeft += spacesRect.width
+      }
+
+      lines.push({
+        text: trimmed,
+        left: adjustedLeft,
+        top: rect.top,
+        width: rect.width,
+        height: rect.height
+      })
+    }
   }
 
   for (let i = 0; i < chars.length; i++) {
@@ -285,6 +343,12 @@ export function renderTextNode(ctx: RenderContext, textNode: Text, parentElement
   // italic / oblique 都按斜体处理
   const italic = styles.fontStyle === 'italic' || styles.fontStyle.startsWith('oblique')
 
+  // 解析 letter-spacing（px → pt）
+  const letterSpacingPx = styles.letterSpacing
+  const letterSpacing = letterSpacingPx && letterSpacingPx !== 'normal'
+    ? pxToPt(parseFloat(letterSpacingPx))
+    : 0
+
   // 检查是否需要使用后备字体（有缺失字符且后备字体存在）
   const needsFallback = !!(ctx.missingChars && ctx.missingChars.size > 0 && ctx.fallbackFont)
 
@@ -330,6 +394,7 @@ export function renderTextNode(ctx: RenderContext, textNode: Text, parentElement
             color: rgb(color.r, color.g, color.b),
             italic,
             lineHeight,
+            letterSpacing,
             ctx,
           })
         } else {
@@ -342,6 +407,7 @@ export function renderTextNode(ctx: RenderContext, textNode: Text, parentElement
             color: rgb(color.r, color.g, color.b),
             italic,
             lineHeight,
+            letterSpacing,
           })
         }
       } catch (error) {
@@ -355,8 +421,31 @@ export function renderTextNode(ctx: RenderContext, textNode: Text, parentElement
     const lineHeight = resolveLineHeight(styles, fontSize)
     const defaultFont = selectFont(ctx, fontWeight)
 
+    // 读取 text-align 属性以处理居中对齐
+    const textAlign = styles.textAlign || 'left'
+
     for (const line of lines) {
-      const x = pxToPt(line.left - ctx.containerRect.left)
+      let x = pxToPt(line.left - ctx.containerRect.left)
+
+      // 如果是居中对齐，需要调整 x 坐标
+      if (textAlign === 'center') {
+        // 获取父元素的宽度
+        const parentRect = parentElement.getBoundingClientRect()
+        const parentWidth = pxToPt(parentRect.width)
+        const textWidth = pxToPt(line.width)
+
+        // 计算居中后的起始位置
+        const parentX = pxToPt(parentRect.left - ctx.containerRect.left)
+        x = parentX + (parentWidth - textWidth) / 2
+      } else if (textAlign === 'right') {
+        // 右对齐
+        const parentRect = parentElement.getBoundingClientRect()
+        const parentWidth = pxToPt(parentRect.width)
+        const textWidth = pxToPt(line.width)
+        const parentX = pxToPt(parentRect.left - ctx.containerRect.left)
+        x = parentX + parentWidth - textWidth
+      }
+
       // 每行用自身实测行盒高度定位基线，首行不再被整段高度顶到中部
       const baselineY =
         ctx.pageHeight - pxToPt(line.top - pageRect.top) - baselineFromTop(defaultFont, fontSize, pxToPt(line.height))
@@ -371,6 +460,7 @@ export function renderTextNode(ctx: RenderContext, textNode: Text, parentElement
             color: rgb(color.r, color.g, color.b),
             italic,
             lineHeight,
+            letterSpacing,
             ctx,
           })
         } else {
@@ -383,6 +473,7 @@ export function renderTextNode(ctx: RenderContext, textNode: Text, parentElement
             color: rgb(color.r, color.g, color.b),
             italic,
             lineHeight,
+            letterSpacing,
           })
         }
         // 文字装饰线（下划线 / 删除线 / 上划线），按行宽绘制

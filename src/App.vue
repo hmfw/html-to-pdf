@@ -10,7 +10,6 @@
         <!-- 第 1 页：文本、颜色、字重、斜体 -->
         <div data-pdf-page class="pdf-page">
           <h2 style="margin-top: 0">第 1 页 · 文本与排版</h2>
-
           <h3>中英文混排，组合</h3>
           <p>这是一段中文文本，使用思源黑体显示。</p>
           <p>This is English text content.</p>
@@ -30,6 +29,22 @@
           <p>普通文本与 <strong>粗体文本</strong> 混排。</p>
           <p style="font-style: italic">斜体文本 italic（skew 模拟）</p>
           <p style="font-weight: 700; font-style: italic">粗体 + 斜体</p>
+          <h3>拼音标注（ruby）</h3>
+          <p>
+            <ruby>汉<rt>hàn</rt></ruby>
+            <ruby>字<rt>zì</rt></ruby>
+            <ruby>拼<rt>pīn</rt></ruby>
+            <ruby>音<rt>yīn</rt></ruby>
+            <ruby>标<rt>biāo</rt></ruby>
+            <ruby>注<rt>zhù</rt></ruby>
+          </p>
+          <p>
+            <ruby>学<rt>xué</rt></ruby>
+            <ruby>习<rt>xí</rt></ruby>
+            <ruby>中<rt>zhōng</rt></ruby>
+            <ruby>文<rt>wén</rt></ruby>
+            很有趣！
+          </p>
         </div>
 
         <!-- 第 2 页：背景、边框、列表、引用 -->
@@ -120,8 +135,9 @@
 
           <h3>代码块</h3>
           <pre><code>const result = await htmlToPdf(element, {
-  filename: 'document'
-});</code></pre>
+    filename: 'document'
+  });
+</code></pre>
         </div>
 
         <!-- 第 4 页：列表 / 长文本换行 / 行内混排 -->
@@ -220,7 +236,7 @@
           </table>
         </div>
         <div data-pdf-page class="pdf-page">
-          <h3>合并单元格（colspan / rowspan）</h3>
+          <h2>第 6 页 · 合并单元格（colspan / rowspan）</h2>
           <p class="hint">提示：合并单元格建议显式设置背景色，避免下层行条纹透出。</p>
           <table class="data-table merge-table">
             <thead>
@@ -258,6 +274,75 @@
               </tr>
             </tbody>
           </table>
+        </div>
+
+        <!-- 第 7 页：生僻字与不常见字符测试 -->
+        <div data-pdf-page class="pdf-page page-7">
+          <h2>第 7 页 · 生僻字与不常见字符</h2>
+
+          <h3>常见生僻字</h3>
+          <p>龘靐齉爩麤龗灪龖厵靊飝鱻羴猋贔掱劦晶磊淼焱垚畾叒壵厽尛孨巭嫑槑玊</p>
+
+          <h3>古文与异体字</h3>
+          <p>曌曄曇曈曉曌煕煜煕燁爀爇爕燿燮燦煒燁熀爕爍爐灃灧灡灟灤灝灱灞灊灌灃</p>
+
+          <h3>繁体字与异体字</h3>
+          <p>
+            鬱鬱蔥蔥讀書萬卷習慣處處皆學問機會難得寶貴時間飛逝歲月崢嶸歷練艱辛
+            驚豔奪目燦爛輝煌璀璨奪目瑰麗壯觀險峻陡峭嶄新嶙峋峻峭巍峨巒峰疊嶂
+          </p>
+
+          <h3>中文姓氏生僻字</h3>
+          <p>
+            万俟、澹台、上官、司馬、歐陽、夏侯、諸葛、申屠、公孫、軒轅、令狐、
+            鍾離、宇文、長孫、慕容、鮮于、閭丘、司徒、司空、亓官、壤駟、濮陽
+          </p>
+
+          <h3>地名与专有名词</h3>
+          <p>
+            鄭州鞏義滎陽汴梁洛邑豫州冀州兗州徐州揚州荊州梁州雍州涼州幽州幷州
+            崑崙巫峽瞿塘灩澦嘉陵岷江峨眉劍閣潼關函谷蒲坂渭南咸陽長樂未央建章
+          </p>
+
+          <h3>文言虚词与文言文常见字</h3>
+          <p>
+            夫、蓋、竊、嗟、嗚呼、噫嘻、吁、嘆、曰、云、兮、乎、哉、矣、耳、
+            焉、也、者、之、其、何、若、乃、而、且、或、雖、雖然、然則、是故
+          </p>
+        </div>
+        <div data-pdf-page class="pdf-page page-7">
+          <h3>诗词常见字</h3>
+          <p>
+            蕭瑟霜露淒清嘯風嘆瀟灑飄零悵惘惆悵徘徊躊躇彷徨躑躅蹉跎嗟歎淚痕憔悴
+            憂愁哀怨愁緒閒愁幽怨淒涼淒婉婉轉悠揚嘹亮嫋嫋裊裊嫋娜娉婷婀娜綽約
+          </p>
+
+          <h3>成语典故用字</h3>
+          <p>
+            鞠躬盡瘁死而後已臥薪嘗膽懸梁刺股鑿壁偷光囊螢映雪韋編三絕孜孜不倦
+            錙銖必較殫精竭慮嘔心瀝血披荊斬棘櫛風沐雨篳路藍縷胼手胝足櫛沐風雨
+          </p>
+
+          <h3>文化与哲学用语</h3>
+          <p>
+            陰陽五行乾坤坎離震巽艮兌八卦六十四卦太極兩儀四象河圖洛書周易繫辭
+            天干地支甲乙丙丁戊己庚辛壬癸子丑寅卯辰巳午未申酉戌亥歲次紀年曆法
+          </p>
+
+          <h3>数字大写</h3>
+          <p>壹貳叁肆伍陸柒捌玖拾佰仟萬億兆京垓秭穰溝澗正載極恆河沙阿僧祇那由他</p>
+
+          <h3>计量单位古字</h3>
+          <p>尺丈寸分釐毫絲忽微纖塵埃渺漠斤兩錢分釐毫絲忽石擔斛斗升合勺撮畝頃</p>
+
+          <h3>Unicode 特殊符号与标点</h3>
+          <p>①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⒈⒉⒊⒋⒌⒍⒎⒏⒐⒑⒒⒓⒔⒕⒖㈠㈡㈢㈣㈤ ⅰⅱⅲⅳⅴⅵⅶⅷⅸⅹⅠⅡⅢⅣⅤⅥⅦⅧⅨⅩⅪⅫ</p>
+
+          <h3>特殊标点与符号</h3>
+          <p>、。，；：？！''""〔〕【】《》〈〉「」『』（）〖〗…—～·※§№☆★○●◎◇◆□■△▲▽▼</p>
+
+          <h3>CJK 兼容汉字</h3>
+          <p>㐀㐁㐂㐃㐄㐅㐆㐇㐈㐉㐊㐋㐌㐍㐎㐏㐐㐑㐒㐓㐔㐕㐖㐗㐘㐙㐚㐛㐜㐝㐞</p>
         </div>
       </div>
     </div>
@@ -378,10 +463,10 @@ async function handleExport() {
       //   regular: '/public/fonts/AlibabaSansHK-55.woff',
       //   bold: '/public/fonts/AlibabaSansHK-75.woff',
       // },
-      converterOptions: {
-        from: 'cn',
-        to: 'hk',
-      },
+      // converterOptions: {
+      //   from: 'cn',
+      //   to: 'hk',
+      // },
     })
 
     if (result.success) {
@@ -453,6 +538,7 @@ h1 {
 .pdf-document {
   max-width: 794px; /* A4 宽度 (595.28pt / 0.75 = 794px) */
   margin: 0 auto;
+  padding: 40px;
   background: white;
   box-sizing: border-box;
 }
@@ -665,5 +751,32 @@ code {
   position: absolute;
   top: -8px;
   right: -8px;
+}
+.page-7 {
+  letter-spacing: 3px;
+  font-size: 19px;
+}
+
+/* Ruby 拼音标注样式 */
+ruby {
+  padding: 0 4px;
+  display: inline-flex;
+  flex-direction: column-reverse;
+  align-items: center;
+  vertical-align: baseline;
+  line-height: 1;
+  position: relative;
+}
+
+rt {
+  display: block;
+  font-size: 0.5em;
+  line-height: 1.2;
+  margin-bottom: 2px;
+  color: #666;
+  /* 确保 rt 元素宽度足够容纳汉字，并让文本居中 */
+  min-width: 2em;
+  text-align: center;
+  white-space: nowrap;
 }
 </style>

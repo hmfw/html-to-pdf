@@ -19,6 +19,11 @@ export function extractUsedCharacters(element: HTMLElement): Set<string> {
         // charCodeAt(0) 只取高代理项（0xD83D 等），会漏判而无法过滤。
         const code = char.codePointAt(0) ?? 0
 
+        // 过滤控制字符（包括换行符、制表符等，U+0000-U+001F 和 U+007F-U+009F）
+        if (code <= 0x1F || (code >= 0x7F && code <= 0x9F)) {
+          continue
+        }
+
         // 过滤彩色 emoji（多在星空平面 U+1F000+，需彩色字体，PDF 嵌入会失败）。
         // 保留 BMP 常见符号（★☎✓©®™ 等 U+2000–U+2FFF），中文字体通常支持。
         const isColorEmoji =

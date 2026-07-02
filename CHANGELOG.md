@@ -5,6 +5,27 @@
 格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [1.5.0] - 2026-07-02
+
+### Added
+
+- **CSS letter-spacing 支持**：新增 CSS `letter-spacing` 属性支持。
+  - 支持正字符间距（如 `2px`、`5px`）和负字符间距（如 `-1px`）
+  - 支持与粗体、斜体组合使用
+  - 支持中英文混排、后备字体和字符映射场景
+  - 当 `letter-spacing` 为 `normal` 或 0 时，保持原有的整段绘制逻辑以优化性能
+  - 示例中第 7 页应用了 `letter-spacing: 3px` 用于测试
+- **CSS text-align 支持**：新增 `text-align` 属性支持（`left`、`center`、`right`）。
+  - 正确处理居中和右对齐文本的位置
+  - 特别改善了 `<ruby>` 拼音标注中 `<rt>` 元素的居中显示
+  - 示例中第 1 页添加了拼音标注示例
+- **拼音标注示例**：在示例第 1 页添加了使用 `<ruby>` 和 `<rt>` 标签的拼音标注示例。
+
+### Fixed
+
+- **修复文本前导空格导致的偏移问题**：在 `measureVisualLines` 中，当文本包含前导空格时，现在会正确调整起始坐标，避免文字向右偏移。此问题在有 `letter-spacing` 时更明显，现已彻底修复。
+- **过滤控制字符**：在字体子集化时过滤换行符（U+000A）等控制字符（U+0000-U+001F 和 U+007F-U+009F），避免不必要的字体缺失警告。
+
 ## [1.4.0] - 2025-01-09
 
 ### Added

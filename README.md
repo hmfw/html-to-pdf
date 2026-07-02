@@ -14,7 +14,7 @@
 - **自动字体子集化**：只嵌入页面实际用到的字形，文件通常约 500KB
 - 完整的 TypeScript 类型支持
 - 支持多页文档（内容流**自动分页**，或 `data-pdf-page` 手动分页）
-- 支持常见 HTML/CSS：标题、段落、列表、表格、图片、Canvas、引用、代码块、粗体、斜体、颜色、背景、边框、圆角
+- 支持常见 HTML/CSS：标题、段落、列表、表格、图片、Canvas、引用、代码块、粗体、斜体、颜色、背景、边框、圆角、字符间距（letter-spacing）、文本对齐（text-align）
 - **实验性支持** `::before` / `::after` 伪元素（仅背景色和边框，需明确尺寸）
 
 ## 安装
@@ -50,17 +50,17 @@ pnpm add @hmfw/html-to-pdf
 
 ```bash
 # 手动复制
-cp node_modules/@hmfw/html-to-pdf/public/fonts/*.otf public/fonts/
+cp node_modules/@hmfw/html-to-pdf/public/fonts/*.woff public/fonts/
 
 # 或在 package.json 添加安装后钩子
 {
   "scripts": {
-    "postinstall": "mkdir -p public/fonts && cp node_modules/@hmfw/html-to-pdf/public/fonts/*.otf public/fonts/"
+    "postinstall": "mkdir -p public/fonts && cp node_modules/@hmfw/html-to-pdf/public/fonts/*.woff public/fonts/"
   }
 }
 ```
 
-确保字体可通过 `/fonts/Source_Han_Sans_SC_Regular.otf` 和 `/fonts/Source_Han_Sans_SC_Bold.otf` 访问。
+确保字体可通过 `/fonts/Source_Han_Sans_SC_Regular.woff` 和 `/fonts/Source_Han_Sans_SC_Bold.woff` 访问。
 
 ### 方法 2：使用 CDN 或自定义路径
 
@@ -69,8 +69,8 @@ cp node_modules/@hmfw/html-to-pdf/public/fonts/*.otf public/fonts/
 ```ts
 await htmlToPdf(element, {
   fontPaths: {
-    regular: 'https://your-cdn.com/fonts/Source_Han_Sans_SC_Regular.otf',
-    bold: 'https://your-cdn.com/fonts/Source_Han_Sans_SC_Bold.otf',
+    regular: 'https://your-cdn.com/fonts/Source_Han_Sans_SC_Regular.woff',
+    bold: 'https://your-cdn.com/fonts/Source_Han_Sans_SC_Bold.woff',
   },
 })
 ```
@@ -319,8 +319,8 @@ await htmlToPdf(element, { fontSubset: false })
   pageSize?: 'A4' | 'A3' | 'Letter'                   // 或自定义 { width, height }（单位 pt），默认 'A4'
   orientation?: 'portrait' | 'landscape'              // 页面方向，默认 'portrait'
   fontPaths?: {                                       // 自定义字体路径（可选）
-    regular?: string                                  // Regular 字体 URL，默认 '/fonts/Source_Han_Sans_SC_Regular.otf'
-    bold?: string                                     // Bold 字体 URL，默认 '/fonts/Source_Han_Sans_SC_Bold.otf'
+    regular?: string                                  // Regular 字体 URL，默认 '/fonts/Source_Han_Sans_SC_Regular.woff'
+    bold?: string                                     // Bold 字体 URL，默认 '/fonts/Source_Han_Sans_SC_Bold.woff'
   }
   basePath?: string                                   // 部署基础路径，默认 '/'。子路径部署时传入应用 base（如 Vite 的 import.meta.env.BASE_URL），默认字体路径自动带上前缀避免 404
   fontFallback?: boolean                              // 使用自定义字体时，检测到缺字才按需加载后备字体（思源黑体），默认 true
