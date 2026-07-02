@@ -7,6 +7,37 @@
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-07-02
+
+### Changed
+
+- **Breaking**: 移除后备字体功能（`fontFallback` 选项）
+  - 简化架构：移除动态字体切换逻辑，只使用单一主字体
+  - 缺字字符统一显示为 ⛝ (U+26DD)，不再自动加载思源黑体作为后备
+  - `converterOptions` 成为唯一的缺字解决方案（推荐使用）
+  - 性能提升：移除后备字体检查和切换逻辑，渲染更快
+  - 代码简化：减少约 30% 的后备字体相关代码
+  - 用户影响：需要主动配置 `converterOptions` 或使用包含所需全部字符的字体
+- **文档重构**：精简 README.md 从 480 行到 286 行（减少 40%）
+  - 创建独立的 FAQ 文档（`docs/faq.md`）
+  - 移除冗余内容，保留核心快速上手指南
+  - 优化章节结构，添加文档导航
+
+### Fixed
+
+- **修复文档错误**：修正所有提到 `node_modules/@hmfw/html-to-pdf/public/fonts/` 的位置
+  - 字体文件不随 npm 包发布（避免 30MB 体积增加）
+  - 更正为从 GitHub 仓库下载字体文件
+  - 涉及文件：`README.md`、`docs/multi-framework.md`、`docs/custom-fonts.md`、`src/utils/fontLoader.ts`
+- **修复文档错误**：移除 `docs/multi-framework.md` 中不存在的 `margin` 选项
+- **修复文档遗漏**：在 README.md API 配置表格中补充 `converterOptions` 和 `debug` 字段
+- **修复过时注释**：更正 `src/constants.ts` 中关于 `data-pdf-page` 嵌套的说明
+
+### Improved
+
+- 统一缺字描述：使用 ⛝ (U+26DD) 替代模糊的"方块"描述
+- 优化警告信息：明确提示字符将显示为 ⛝ (U+26DD)
+
 ## [1.5.1] - 2026-07-02
 
 ### Changed
