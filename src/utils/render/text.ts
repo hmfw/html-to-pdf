@@ -14,7 +14,7 @@ import { getStyle } from './layoutCache.js'
 /**
  * 根据字重选择合适的字体。
  * 中英文统一走子集化的思源黑体（子集已包含页面用到的拉丁字符），
- * 保证中英文混排时字形一致；仅在子集字体缺失时回退到内置 Helvetica。
+ * 保证中英文混排时字形一致。
  */
 export function selectFont(ctx: RenderContext, fontWeight: string | number): PDFFont {
   // 解析字重（处理字符串和数字）
@@ -37,9 +37,7 @@ export function selectFont(ctx: RenderContext, fontWeight: string | number): PDF
   const isBold = weight >= 600
 
   // 使用主字体
-  const mainFont = isBold
-    ? (ctx.chineseFontBold ?? ctx.chineseFont ?? ctx.latinFontBold)
-    : (ctx.chineseFont ?? ctx.latinFont)
+  const mainFont = isBold ? (ctx.chineseFontBold ?? ctx.chineseFont) : ctx.chineseFont
 
   return mainFont
 }
@@ -47,27 +45,24 @@ export function selectFont(ctx: RenderContext, fontWeight: string | number): PDF
 /** 斜体倾斜角度（度）。项目未内嵌斜体字体，用 skew 变换模拟 oblique */
 const ITALIC_SKEW_DEGREES = 12
 
-type DrawTextOptions = {
+/** 文本渲染的基础配置 */
+type BaseTextOptions = {
   x: number
   y: number
   size: number
-  font: PDFFont
   color: ReturnType<typeof rgb>
   italic: boolean
-  maxWidth?: number
-  lineHeight?: number
   letterSpacing?: number
 }
 
-type RenderWithFallbackOptions = {
-  x: number
-  y: number
-  size: number
+/** 底层绘制选项：需要已选好的字体对象 */
+type DrawTextOptions = BaseTextOptions & {
+  font: PDFFont
+}
+
+/** 上层渲染选项：需要字重和上下文来选择字体、处理字符映射 */
+type RenderWithFallbackOptions = BaseTextOptions & {
   fontWeight: string | number
-  color: ReturnType<typeof rgb>
-  italic: boolean
-  lineHeight?: number
-  letterSpacing?: number
   ctx: RenderContext
 }
 
@@ -76,12 +71,21 @@ type RenderWithFallbackOptions = {
  * 当字符有映射时（如繁体字库遇到简体字），使用映射后的繁体字符。
  * 将相邻字符合并为段，减少 drawText 调用次数。
  */
-function renderTextWithFallback(page: PDFPage, text: string, opts: RenderWithFallbackOptions): void {
+function renderTextWithFallback(
+  page: PDFPage,
+  text: string,
+  opts: RenderWithFallbackOptions,
+): void {
   const { x, y, size, fontWeight, color, italic, letterSpacing, ctx } = opts
   const chars = Array.from(text) // 处理代理对
 
   // 根据字重选择简繁映射表
-  const weight = typeof fontWeight === 'number' ? fontWeight : (fontWeight === 'bold' || fontWeight === 'bolder' ? 700 : 400)
+  const weight =
+    typeof fontWeight === 'number'
+      ? fontWeight
+      : fontWeight === 'bold' || fontWeight === 'bolder'
+        ? 700
+        : 400
   const isBold = weight >= 600
   const charMap = isBold ? ctx.charMapBold : ctx.charMapRegular
 
@@ -195,7 +199,130 @@ export function baselineFromTop(font: PDFFont, fontSize: number, lineBoxPt: numb
 /** 单个可视行的测量结果：文本内容 + 该行在视口中的矩形 */
 type MeasuredLine = { text: string; left: number; top: number; width: number; height: number }
 
-// PLACEHOLDER_TEXT_REST
+/** 文本样式集合 */
+type TextStyles = {
+  fontSize: number // pt
+  fontWeight: string
+  color: ReturnType<typeof parseColor>
+  italic: boolean
+  letterSpacing: number // pt
+  textAlign: string
+}
+
+/**
+ * 从元素收集文本渲染所需的样式
+ */
+function collectTextStyles(styles: CSSStyleDeclaration): TextStyles {
+  const fontSize = pxToPt(parseFloat(styles.fontSize))
+  const fontWeight = styles.fontWeight
+  const color = parseColor(styles.color)
+  const italic = styles.fontStyle === 'italic' || styles.fontStyle.startsWith('oblique')
+
+  const letterSpacingPx = styles.letterSpacing
+  const letterSpacing =
+    letterSpacingPx && letterSpacingPx !== 'normal' ? pxToPt(parseFloat(letterSpacingPx)) : 0
+
+  const textAlign = styles.textAlign || 'left'
+
+  return { fontSize, fontWeight, color, italic, letterSpacing, textAlign }
+}
+
+/**
+ * 检查元素是否在 <pre> 标签内
+ */
+function isInPreformatted(element: HTMLElement): boolean {
+  let current = element as HTMLElement | null
+  while (current) {
+    if (current.tagName === 'PRE') {
+      return true
+    }
+    current = current.parentElement
+  }
+  return false
+}
+
+/**
+ * 计算文本对齐后的 X 坐标
+ */
+function calculateAlignedX(
+  textAlign: string,
+  lineLeft: number,
+  lineWidth: number,
+  containerLeft: number,
+  parentElement: HTMLElement,
+): number {
+  let x = pxToPt(lineLeft - containerLeft)
+
+  if (textAlign === 'center') {
+    const parentRect = parentElement.getBoundingClientRect()
+    const parentWidth = pxToPt(parentRect.width)
+    const textWidth = pxToPt(lineWidth)
+    const parentX = pxToPt(parentRect.left - containerLeft)
+    x = parentX + (parentWidth - textWidth) / 2
+  } else if (textAlign === 'right') {
+    const parentRect = parentElement.getBoundingClientRect()
+    const parentWidth = pxToPt(parentRect.width)
+    const textWidth = pxToPt(lineWidth)
+    const parentX = pxToPt(parentRect.left - containerLeft)
+    x = parentX + parentWidth - textWidth
+  }
+
+  return x
+}
+
+/**
+ * 渲染单行文本（支持字符映射和装饰线）
+ */
+function renderSingleLine(
+  page: PDFPage,
+  text: string,
+  x: number,
+  y: number,
+  textStyles: TextStyles,
+  ctx: RenderContext,
+  styles: CSSStyleDeclaration,
+  lineWidth: number,
+): void {
+  const { fontSize, fontWeight, color, italic, letterSpacing } = textStyles
+  const needsCharMapping = !!(ctx.charMapRegular || ctx.charMapBold)
+  const defaultFont = selectFont(ctx, fontWeight)
+
+  try {
+    if (needsCharMapping) {
+      renderTextWithFallback(page, text, {
+        x,
+        y,
+        size: fontSize,
+        fontWeight,
+        color: rgb(color.r, color.g, color.b),
+        italic,
+        letterSpacing,
+        ctx,
+      })
+    } else {
+      drawStyledText(page, text, {
+        x,
+        y,
+        size: fontSize,
+        font: defaultFont,
+        color: rgb(color.r, color.g, color.b),
+        italic,
+        letterSpacing,
+      })
+    }
+
+    // 绘制文字装饰线
+    drawTextDecoration(page, styles, {
+      x,
+      baselineY: y,
+      width: pxToPt(lineWidth),
+      fontSize,
+      color: rgb(color.r, color.g, color.b),
+    })
+  } catch (error) {
+    console.warn('Failed to draw text:', text, error)
+  }
+}
 
 /**
  * 用 Range 逐字符测量，把一个文本节点切分为浏览器实际渲染的「可视行」。
@@ -242,7 +369,7 @@ function measureVisualLines(textNode: Text): MeasuredLine[] {
         left: adjustedLeft,
         top: rect.top,
         width: rect.width,
-        height: rect.height
+        height: rect.height,
       })
     }
   }
@@ -278,13 +405,81 @@ function measureVisualLines(textNode: Text): MeasuredLine[] {
 }
 
 /**
+ * 渲染预格式化文本（<pre> 标签内的多行文本）
+ */
+function renderPreformattedText(
+  ctx: RenderContext,
+  textNode: Text,
+  page: PDFPage,
+  pageRect: DOMRect,
+  rect: DOMRect,
+  textStyles: TextStyles,
+  styles: CSSStyleDeclaration,
+): void {
+  const lines = textNode.textContent!.split('\n')
+  const { fontSize, fontWeight } = textStyles
+  const lineHeight = resolveLineHeight(styles, fontSize)
+  const defaultFont = selectFont(ctx, fontWeight)
+  const firstBaseline = baselineFromTop(defaultFont, fontSize, lineHeight)
+
+  lines.forEach((line, index) => {
+    if (!line.trim()) return
+
+    const lineY =
+      ctx.pageHeight - pxToPt(rect.top - pageRect.top) - firstBaseline - index * lineHeight
+    const x = pxToPt(rect.left - ctx.containerRect.left)
+
+    renderSingleLine(page, line, x, lineY, textStyles, ctx, styles, rect.width)
+  })
+}
+
+/**
+ * 渲染普通文本（基于 Range 精确测量的多行文本）
+ */
+function renderNormalText(
+  ctx: RenderContext,
+  textNode: Text,
+  page: PDFPage,
+  pageRect: DOMRect,
+  parentElement: HTMLElement,
+  textStyles: TextStyles,
+  styles: CSSStyleDeclaration,
+): void {
+  const lines = measureVisualLines(textNode)
+  const { fontSize, fontWeight, textAlign } = textStyles
+  const defaultFont = selectFont(ctx, fontWeight)
+
+  for (const line of lines) {
+    const x = calculateAlignedX(
+      textAlign,
+      line.left,
+      line.width,
+      ctx.containerRect.left,
+      parentElement,
+    )
+
+    const baselineY =
+      ctx.pageHeight -
+      pxToPt(line.top - pageRect.top) -
+      baselineFromTop(defaultFont, fontSize, pxToPt(line.height))
+
+    renderSingleLine(page, line.text, x, baselineY, textStyles, ctx, styles, line.width)
+  }
+}
+
+/**
  * 渲染文本节点（基于 Range 精确定位）
  *
  * 如果存在字符映射（简繁转换），会逐字符渲染并应用映射。
  */
-export function renderTextNode(ctx: RenderContext, textNode: Text, parentElement: HTMLElement): void {
+export function renderTextNode(
+  ctx: RenderContext,
+  textNode: Text,
+  parentElement: HTMLElement,
+): void {
   const text = textNode.textContent?.trim()
   if (!text) return
+
   // 用临时 range 获取文本节点的精确位置
   const range = document.createRange()
   range.selectNodeContents(textNode)
@@ -298,151 +493,13 @@ export function renderTextNode(ctx: RenderContext, textNode: Text, parentElement
   const page = ctx.pages[pageIndex]
 
   const styles = getStyle(ctx.layoutCache, parentElement)
-  const fontSize = pxToPt(parseFloat(styles.fontSize)) // px → pt
-  const fontWeight = styles.fontWeight
-  const color = parseColor(styles.color)
-  // italic / oblique 都按斜体处理
-  const italic = styles.fontStyle === 'italic' || styles.fontStyle.startsWith('oblique')
+  const textStyles = collectTextStyles(styles)
 
-  // 解析 letter-spacing（px → pt）
-  const letterSpacingPx = styles.letterSpacing
-  const letterSpacing = letterSpacingPx && letterSpacingPx !== 'normal'
-    ? pxToPt(parseFloat(letterSpacingPx))
-    : 0
-
-  // 检查是否需要字符映射（简繁转换）
-  const needsCharMapping = !!(ctx.charMapRegular || ctx.charMapBold)
-
-  // 检查是否在 <pre> 标签内（需要保留换行符）
-  let isPreformatted = false
-  let current = parentElement
-  while (current) {
-    if (current.tagName === 'PRE') {
-      isPreformatted = true
-      break
-    }
-    current = current.parentElement as HTMLElement
-  }
-
-  // 对于 <pre> 内的多行文本，按行分别渲染
-  if (isPreformatted && text.includes('\n')) {
-    const lines = textNode.textContent!.split('\n')
-    const lineHeight = resolveLineHeight(styles, fontSize)
-    const defaultFont = selectFont(ctx, fontWeight)
-    // 每行行盒高度即 lineHeight，基线据此居中定位
-    const firstBaseline = baselineFromTop(defaultFont, fontSize, lineHeight)
-
-    lines.forEach((line, index) => {
-      if (!line.trim()) return // 跳过空行
-
-      // 基线 = 边界框顶部 + 首行基线偏移 + 当前行偏移
-      const lineY = ctx.pageHeight - pxToPt(rect.top - pageRect.top) - firstBaseline - index * lineHeight
-
-      try {
-        if (needsCharMapping) {
-          // 需要字符映射：逐字符渲染
-          renderTextWithFallback(page, line, {
-            x: pxToPt(rect.left - ctx.containerRect.left),
-            y: lineY,
-            size: fontSize,
-            fontWeight,
-            color: rgb(color.r, color.g, color.b),
-            italic,
-            lineHeight,
-            letterSpacing,
-            ctx,
-          })
-        } else {
-          // 不需要字符映射：整行渲染
-          drawStyledText(page, line, {
-            x: pxToPt(rect.left - ctx.containerRect.left),
-            y: lineY,
-            size: fontSize,
-            font: defaultFont,
-            color: rgb(color.r, color.g, color.b),
-            italic,
-            lineHeight,
-            letterSpacing,
-          })
-        }
-      } catch (error) {
-        console.warn('Failed to draw text line:', line, error)
-      }
-    })
+  // 根据是否在 <pre> 内分别处理
+  if (isInPreformatted(parentElement) && text.includes('\n')) {
+    renderPreformattedText(ctx, textNode, page, pageRect, rect, textStyles, styles)
   } else {
-    // 普通文本：用 Range 逐行测量，复刻浏览器换行点后逐行绘制，
-    // 不再交给 pdf-lib 自动换行（其宽度估算会导致中英文混排时换行点偏差、右侧溢出）。
-    const lines = measureVisualLines(textNode)
-    const lineHeight = resolveLineHeight(styles, fontSize)
-    const defaultFont = selectFont(ctx, fontWeight)
-
-    // 读取 text-align 属性以处理居中对齐
-    const textAlign = styles.textAlign || 'left'
-
-    for (const line of lines) {
-      let x = pxToPt(line.left - ctx.containerRect.left)
-
-      // 如果是居中对齐，需要调整 x 坐标
-      if (textAlign === 'center') {
-        // 获取父元素的宽度
-        const parentRect = parentElement.getBoundingClientRect()
-        const parentWidth = pxToPt(parentRect.width)
-        const textWidth = pxToPt(line.width)
-
-        // 计算居中后的起始位置
-        const parentX = pxToPt(parentRect.left - ctx.containerRect.left)
-        x = parentX + (parentWidth - textWidth) / 2
-      } else if (textAlign === 'right') {
-        // 右对齐
-        const parentRect = parentElement.getBoundingClientRect()
-        const parentWidth = pxToPt(parentRect.width)
-        const textWidth = pxToPt(line.width)
-        const parentX = pxToPt(parentRect.left - ctx.containerRect.left)
-        x = parentX + parentWidth - textWidth
-      }
-
-      // 每行用自身实测行盒高度定位基线，首行不再被整段高度顶到中部
-      const baselineY =
-        ctx.pageHeight - pxToPt(line.top - pageRect.top) - baselineFromTop(defaultFont, fontSize, pxToPt(line.height))
-      try {
-        if (needsCharMapping) {
-          // 需要字符映射：逐字符渲染
-          renderTextWithFallback(page, line.text, {
-            x,
-            y: baselineY,
-            size: fontSize,
-            fontWeight,
-            color: rgb(color.r, color.g, color.b),
-            italic,
-            lineHeight,
-            letterSpacing,
-            ctx,
-          })
-        } else {
-          // 不需要字符映射：整行渲染
-          drawStyledText(page, line.text, {
-            x,
-            y: baselineY,
-            size: fontSize,
-            font: defaultFont,
-            color: rgb(color.r, color.g, color.b),
-            italic,
-            lineHeight,
-            letterSpacing,
-          })
-        }
-        // 文字装饰线（下划线 / 删除线 / 上划线），按行宽绘制
-        drawTextDecoration(page, styles, {
-          x,
-          baselineY,
-          width: pxToPt(line.width),
-          fontSize,
-          color: rgb(color.r, color.g, color.b),
-        })
-      } catch (error) {
-        console.warn('Failed to draw text:', line.text, error)
-      }
-    }
+    renderNormalText(ctx, textNode, page, pageRect, parentElement, textStyles, styles)
   }
 }
 
@@ -454,7 +511,13 @@ export function renderTextNode(ctx: RenderContext, textNode: Text, parentElement
 function drawTextDecoration(
   page: PDFPage,
   styles: CSSStyleDeclaration,
-  opts: { x: number; baselineY: number; width: number; fontSize: number; color: ReturnType<typeof rgb> },
+  opts: {
+    x: number
+    baselineY: number
+    width: number
+    fontSize: number
+    color: ReturnType<typeof rgb>
+  },
 ): void {
   const line = styles.textDecorationLine || styles.textDecoration || 'none'
   if (!line || line === 'none') return
@@ -467,5 +530,3 @@ function drawTextDecoration(
   if (line.includes('line-through')) draw(baselineY + fontSize * 0.28)
   if (line.includes('overline')) draw(baselineY + fontSize * 0.78)
 }
-
-

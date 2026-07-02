@@ -1,4 +1,4 @@
-import { PDFDocument, PDFFont, StandardFonts } from '@pdfme/pdf-lib'
+import { PDFDocument, PDFFont } from '@pdfme/pdf-lib'
 import * as fontkit from 'fontkit'
 import type { PdfExportOptions, PdfGenerateResult } from '../types.js'
 import { renderHTML, type RenderContext } from './pdfRenderer.js'
@@ -227,7 +227,7 @@ async function embedChineseFonts(
       regular: regularBuf,
       bold: boldBuf,
     },
-    converterOptions
+    converterOptions,
   )
   monitor.mark('创建字体子集')
 
@@ -253,7 +253,10 @@ async function embedChineseFonts(
  * @param options - 导出选项
  * @returns 包含 blob 的结果对象
  */
-export async function htmlToPdf(element: HTMLElement, options: PdfExportOptions = {}): Promise<PdfGenerateResult> {
+export async function htmlToPdf(
+  element: HTMLElement,
+  options: PdfExportOptions = {},
+): Promise<PdfGenerateResult> {
   const monitor = createPerformanceMonitor(options.debug)
   monitor.start()
 
@@ -261,11 +264,7 @@ export async function htmlToPdf(element: HTMLElement, options: PdfExportOptions 
     const pdfDoc = await PDFDocument.create()
     pdfDoc.registerFontkit(fontkit as any)
 
-    // 英文使用标准字体（Regular + Bold），中文使用动态子集化字体
-    const latinFont = await pdfDoc.embedFont(StandardFonts.Helvetica)
-    const latinFontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold)
-    monitor.mark('加载标准字体')
-
+    // 中英文统一使用动态子集化的思源黑体（子集已含页面用到的拉丁字符）
     const subset = options.fontSubset !== false
     const chineseFonts = await embedChineseFonts(
       pdfDoc,
@@ -281,7 +280,8 @@ export async function htmlToPdf(element: HTMLElement, options: PdfExportOptions 
     // 页面尺寸、边距、方向
     const pageSize = getPageSize(options.pageSize)
     const orientation = options.orientation || 'portrait'
-    const finalPageSize = orientation === 'landscape' ? { width: pageSize.height, height: pageSize.width } : pageSize
+    const finalPageSize =
+      orientation === 'landscape' ? { width: pageSize.height, height: pageSize.width } : pageSize
 
     const containerRect = element.getBoundingClientRect()
     const { pageRects, autoBands } = computePages(pdfDoc, element, containerRect, finalPageSize)
@@ -299,8 +299,6 @@ export async function htmlToPdf(element: HTMLElement, options: PdfExportOptions 
       pdfDoc,
       pages: pdfDoc.getPages(),
       pageRects,
-      latinFont,
-      latinFontBold,
       chineseFont: chineseFonts.regular,
       chineseFontBold: chineseFonts.bold,
       charMapRegular: chineseFonts.charMapRegular,
@@ -310,8 +308,7 @@ export async function htmlToPdf(element: HTMLElement, options: PdfExportOptions 
       pageWidth: finalPageSize.width,
       autoBands,
       canvasResolver: options.canvasResolver,
-      canvasPixelRatio:
-        options.canvasPixelRatio ?? Math.max(2, window.devicePixelRatio || 1),
+      canvasPixelRatio: options.canvasPixelRatio ?? Math.max(2, window.devicePixelRatio || 1),
       layoutCache: createLayoutCache(),
     }
 

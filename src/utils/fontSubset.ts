@@ -20,17 +20,17 @@ export function extractUsedCharacters(element: HTMLElement): Set<string> {
         const code = char.codePointAt(0) ?? 0
 
         // 过滤控制字符（包括换行符、制表符等，U+0000-U+001F 和 U+007F-U+009F）
-        if (code <= 0x1F || (code >= 0x7F && code <= 0x9F)) {
+        if (code <= 0x1f || (code >= 0x7f && code <= 0x9f)) {
           continue
         }
 
         // 过滤彩色 emoji（多在星空平面 U+1F000+，需彩色字体，PDF 嵌入会失败）。
         // 保留 BMP 常见符号（★☎✓©®™ 等 U+2000–U+2FFF），中文字体通常支持。
         const isColorEmoji =
-          (code >= 0x1F300 && code <= 0x1F9FF) || // Misc Symbols and Pictographs / Emoticons / etc.
-          (code >= 0x1F000 && code <= 0x1F02F) || // Mahjong/Domino Tiles
-          (code >= 0x1FA00 && code <= 0x1FAFF) || // Extended-A (chess, symbols)
-          (code >= 0xFE00 && code <= 0xFE0F) // Variation Selectors (emoji vs text presentation)
+          (code >= 0x1f300 && code <= 0x1f9ff) || // Misc Symbols and Pictographs / Emoticons / etc.
+          (code >= 0x1f000 && code <= 0x1f02f) || // Mahjong/Domino Tiles
+          (code >= 0x1fa00 && code <= 0x1faff) || // Extended-A (chess, symbols)
+          (code >= 0xfe00 && code <= 0xfe0f) // Variation Selectors (emoji vs text presentation)
 
         // 保留所有字符，包括空格、中英文、标点等
         // 只排除彩色 emoji
@@ -50,9 +50,7 @@ export function extractUsedCharacters(element: HTMLElement): Set<string> {
   // 列表项的有序 marker（"1." "2." …）不是 DOM 文本节点，需额外纳入子集，
   // 否则导出时数字/点会因缺字形而绘制失败。圆点/方块 marker 用图形绘制，无需字形。
   const hasOrderedList =
-    element.tagName === 'OL' ||
-    element.tagName === 'LI' ||
-    !!element.querySelector?.('ol, li')
+    element.tagName === 'OL' || element.tagName === 'LI' || !!element.querySelector?.('ol, li')
   if (hasOrderedList) {
     for (const ch of '0123456789.') chars.add(ch)
   }
@@ -73,10 +71,10 @@ export async function createFontSubset(
   fontBuffer: ArrayBuffer,
   characters: Set<string>,
   warnMissing: boolean = true,
-  conversionConfig?: OpenCCConfig
+  conversionConfig?: OpenCCConfig,
 ): Promise<{
   buffer: ArrayBuffer
-  charMap?: Map<string, string>  // 原始字符→转换后字符映射
+  charMap?: Map<string, string> // 原始字符→转换后字符映射
 }> {
   const font = opentype.parse(fontBuffer) as any
 
@@ -88,8 +86,8 @@ export async function createFontSubset(
   const glyphIds = new Set<number>()
   glyphIds.add(0)
 
-  const convertFailedChars: string[] = []  // 转换失败的字符（用于警告）
-  const charMap = new Map<string, string>()  // 原始字符→转换后字符映射
+  const convertFailedChars: string[] = [] // 转换失败的字符（用于警告）
+  const charMap = new Map<string, string>() // 原始字符→转换后字符映射
 
   for (const char of characters) {
     const glyph = font.charToGlyph(char)
@@ -99,15 +97,14 @@ export async function createFontSubset(
     } else if (!glyph || glyph.index === 0) {
       // 字符在字体中不存在，尝试转换
       let resolved = false
-      let hasConversion = false  // 是否发生了转换（转换后与原字符不同）
 
       if (conversionConfig) {
         const convertedChars = convertCharacters(new Set([char]), conversionConfig)
 
         // 尝试转换后的字符
         for (const cChar of convertedChars) {
-          if (cChar !== char) {  // 转换后有变化
-            hasConversion = true
+          if (cChar !== char) {
+            // 转换后有变化
             const cGlyph = font.charToGlyph(cChar)
             if (cGlyph && cGlyph.index !== undefined && cGlyph.index !== 0) {
               // 转换后字符存在，使用转换后字形并记录映射
@@ -120,13 +117,11 @@ export async function createFontSubset(
         }
       }
 
-      // 如果转换未解决，记录为转换失败（用于警告）
+      // 如果转换未解决，记录为缺失字符（用于警告）。
+      // 能走到本分支说明字库里没有该字形，未解决就一定渲染成方块，
+      // 无论是否配置转换、转换是否改变了字符，都应提示。
       if (!resolved) {
-        // 只有"尝试转换但失败"的字符才记录为转换失败
-        // 如果配置了转换但字符无需转换（如特殊符号），不打印警告
-        if (!conversionConfig || hasConversion) {
-          convertFailedChars.push(char)
-        }
+        convertFailedChars.push(char)
       }
     }
   }
@@ -137,11 +132,15 @@ export async function createFontSubset(
       const code = ch.codePointAt(0)?.toString(16).toUpperCase().padStart(4, '0')
       return `'${ch}' (U+${code})`
     })
-    const configInfo = conversionConfig ? `（已尝试转换 ${conversionConfig.from} → ${conversionConfig.to}）` : ''
+    const configInfo = conversionConfig
+      ? `（已尝试转换 ${conversionConfig.from} → ${conversionConfig.to}）`
+      : ''
     console.warn(
       `[html-to-pdf] 以下 ${convertFailedChars.length} 个字符在字体 ${familyName} ${styleName} 中不存在${configInfo}，将显示为方块\n` +
         displayChars.join(', ') +
-        (convertFailedChars.length > 20 ? `\n... 及其他 ${convertFailedChars.length - 20} 个字符` : '')
+        (convertFailedChars.length > 20
+          ? `\n... 及其他 ${convertFailedChars.length - 20} 个字符`
+          : ''),
     )
   }
 
@@ -155,19 +154,19 @@ export async function createFontSubset(
     unitsPerEm: font.unitsPerEm,
     ascender: font.ascender,
     descender: font.descender,
-    glyphs
+    glyphs,
   })
 
   // 如果配置了转换且有成功的映射，打印信息
   if (warnMissing && conversionConfig && charMap.size > 0) {
     console.info(
-      `[html-to-pdf] 成功转换 ${charMap.size} 个字符（${conversionConfig.from} → ${conversionConfig.to}）`
+      `[html-to-pdf] 成功转换 ${charMap.size} 个字符（${conversionConfig.from} → ${conversionConfig.to}）`,
     )
   }
 
   return {
     buffer: subsetFont.toArrayBuffer(),
-    charMap: charMap.size > 0 ? charMap : undefined
+    charMap: charMap.size > 0 ? charMap : undefined,
   }
 }
 
@@ -183,22 +182,19 @@ export async function createFontSubsetsForElement(
   fontBuffers: {
     regular?: ArrayBuffer
     bold?: ArrayBuffer
-    medium?: ArrayBuffer
   },
-  conversionConfig?: OpenCCConfig
+  conversionConfig?: OpenCCConfig,
 ): Promise<{
   regular?: ArrayBuffer
   bold?: ArrayBuffer
-  medium?: ArrayBuffer
-  charMapRegular?: Map<string, string>  // Regular 字体简繁映射
-  charMapBold?: Map<string, string>  // Bold 字体简繁映射
+  charMapRegular?: Map<string, string> // Regular 字体简繁映射
+  charMapBold?: Map<string, string> // Bold 字体简繁映射
 }> {
   const characters = extractUsedCharacters(element)
 
   const subsets: {
     regular?: ArrayBuffer
     bold?: ArrayBuffer
-    medium?: ArrayBuffer
     charMapRegular?: Map<string, string>
     charMapBold?: Map<string, string>
   } = {}
@@ -215,7 +211,7 @@ export async function createFontSubsetsForElement(
         })
         .catch((err) => {
           console.warn('Regular 字体子集创建失败:', err)
-        })
+        }),
     )
   }
 
@@ -228,19 +224,7 @@ export async function createFontSubsetsForElement(
         })
         .catch((err) => {
           console.warn('Bold 字体子集创建失败:', err)
-        })
-    )
-  }
-
-  if (fontBuffers.medium) {
-    tasks.push(
-      createFontSubset(fontBuffers.medium, characters, true, conversionConfig)
-        .then(({ buffer }) => {
-          subsets.medium = buffer
-        })
-        .catch((err) => {
-          console.warn('Medium 字体子集创建失败:', err)
-        })
+        }),
     )
   }
 

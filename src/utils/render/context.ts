@@ -6,10 +6,8 @@ export interface RenderContext {
   pdfDoc: PDFDocument
   pages: PDFPage[]
   pageRects: DOMRect[] // 每个页面对应的 DOM 区域
-  latinFont: PDFFont
-  latinFontBold: PDFFont
-  chineseFont?: PDFFont
-  chineseFontBold?: PDFFont
+  chineseFont: PDFFont // 主字体 Regular（子集化思源黑体，含页面用到的拉丁字符），必需
+  chineseFontBold?: PDFFont // Bold 字重，缺失时降级为 Regular
   charMapRegular?: Map<string, string> // Regular 字体简繁映射（简体→繁体）
   charMapBold?: Map<string, string> // Bold 字体简繁映射（简体→繁体）
   containerRect: DOMRect
