@@ -7,6 +7,11 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **图片格式误判**：`detectImageFormat` 对带 `?query` / `#hash` 的网络 URL（如 COS `imageMogr2`）会先去掉查询串再识别扩展名；内部按文件魔数（JPEG `FF D8 FF` / PNG `89 50 4E 47`）纠正 MIME/扩展名与字节不符的情况（如 `data:image/png;base64,/9j/...`），修复 `The input is not a PNG file!`
+- **嵌入失败回退**：字节嵌入失败或加载失败时，回退为将已解码的 `<img>` 栅格化成 PNG 再嵌入
+
 ## [2.0.0] - 2026-07-02
 
 ### Changed
