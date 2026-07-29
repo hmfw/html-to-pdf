@@ -37,7 +37,7 @@ export default defineConfig(({ command }) => {
         },
         rollupOptions: {
           // 不将任何依赖打包进去
-          external: ['@pdfme/pdf-lib', 'fontkit', 'opentype.js']
+          external: ['@pdfme/pdf-lib', 'fontkit', 'opentype.js', 'opencc-js']
         }
       },
       test,
