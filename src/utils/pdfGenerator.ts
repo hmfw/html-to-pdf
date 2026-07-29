@@ -321,16 +321,18 @@ export async function htmlToPdf(
     const blob = new Blob([pdfBytes as Uint8Array<ArrayBuffer>], { type: 'application/pdf' })
     monitor.end('PDF 导出完成')
 
-    // 自动下载
-    const filename = options.filename || 'document'
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = `${filename}.pdf`
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    URL.revokeObjectURL(url)
+    // 默认自动下载；download: false 时仅返回 blob（如插件打印）
+    if (options.download !== false) {
+      const filename = options.filename || 'document'
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `${filename}.pdf`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(url)
+    }
 
     return { success: true, blob }
   } catch (error) {

@@ -7,6 +7,11 @@ export interface ConverterOptions {
 export interface PdfExportOptions {
   /** PDF 文件名（不含扩展名） */
   filename?: string
+  /**
+   * 是否自动触发浏览器下载（默认 true）。
+   * 设为 false 时只返回 blob，便于上传或交给打印插件等后续处理。
+   */
+  download?: boolean
   /** 页面尺寸 */
   pageSize?: 'A4' | 'A3' | 'Letter' | { width: number; height: number }
   /** 页面方向 */
