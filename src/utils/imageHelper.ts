@@ -101,21 +101,72 @@ export function canvasSourceToArrayBuffer(source: string | ArrayBuffer): ArrayBu
 }
 
 /**
- * 检测图片格式
+ * 检测图片格式。
+ *
+ * 优先按文件魔数纠正（若提供 `data`，或 `src` 为可解码的 data URL）：
+ * MIME / 扩展名与真实字节不符时（如 `data:image/png;base64,/9j/...` 实为 JPEG）返回魔数结果。
+ *
+ * 无可用字节时回退到 data URL MIME 或文件扩展名；网络 URL 会先去掉 `?query` / `#hash`
+ * 再判断扩展名，避免 `a.jpg?imageMogr2/...` 被误判为 unknown。
  */
-export function detectImageFormat(src: string): 'png' | 'jpg' | 'svg' | 'unknown' {
-  const lower = src.toLowerCase()
-  if (lower.includes('data:image/png') || lower.endsWith('.png')) {
-    return 'png'
+export function detectImageFormat(
+  src: string,
+  data?: ArrayBuffer,
+): 'png' | 'jpg' | 'svg' | 'unknown' {
+  // 1. 有字节则按魔数识别并纠正
+  const bytes = data ?? tryDecodeDataUrlBytes(src)
+  if (bytes) {
+    const sniffed = sniffImageFormat(bytes)
+    if (sniffed) return sniffed
   }
-  if (lower.includes('data:image/jpeg') || lower.includes('data:image/jpg') ||
-      lower.endsWith('.jpg') || lower.endsWith('.jpeg')) {
+
+  // 2. 回退：MIME / 扩展名
+  const lower = src.toLowerCase()
+
+  if (lower.startsWith('data:')) {
+    if (lower.includes('data:image/png')) return 'png'
+    if (lower.includes('data:image/jpeg') || lower.includes('data:image/jpg')) return 'jpg'
+    if (lower.includes('data:image/svg+xml')) return 'svg'
+    return 'unknown'
+  }
+
+  const path = lower.split('#')[0].split('?')[0]
+  if (path.endsWith('.png')) return 'png'
+  if (path.endsWith('.jpg') || path.endsWith('.jpeg')) return 'jpg'
+  if (path.endsWith('.svg')) return 'svg'
+  return 'unknown'
+}
+
+/** 尝试将 data URL 解码为字节；非 data URL 或解码失败返回 null */
+function tryDecodeDataUrlBytes(src: string): ArrayBuffer | null {
+  if (!src.toLowerCase().startsWith('data:')) return null
+  try {
+    return dataURLToArrayBuffer(src)
+  } catch {
+    return null
+  }
+}
+
+/**
+ * 按文件魔数识别 PNG / JPEG。
+ * - JPEG: FF D8 FF
+ * - PNG:  89 50 4E 47
+ */
+export function sniffImageFormat(data: ArrayBuffer): 'png' | 'jpg' | null {
+  const bytes = new Uint8Array(data)
+  if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
     return 'jpg'
   }
-  if (lower.includes('data:image/svg+xml') || lower.endsWith('.svg')) {
-    return 'svg'
+  if (
+    bytes.length >= 4 &&
+    bytes[0] === 0x89 &&
+    bytes[1] === 0x50 &&
+    bytes[2] === 0x4e &&
+    bytes[3] === 0x47
+  ) {
+    return 'png'
   }
-  return 'unknown'
+  return null
 }
 
 /**

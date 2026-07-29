@@ -13,18 +13,30 @@ import { pushRoundedRectClip } from './geometry.js'
 
 /** 加载并嵌入 <img> 为 PDFImage（按格式选择 png/jpg，SVG 转换为 PNG） */
 export async function embedImageElement(ctx: RenderContext, img: HTMLImageElement): Promise<PDFImage> {
-  const format = detectImageFormat(img.src)
-
-  // SVG 需要先渲染到 canvas 再转 PNG
-  if (format === 'svg') {
+  // SVG：扩展名/MIME 即可，需栅格化
+  if (detectImageFormat(img.src) === 'svg') {
     const imageData = await imageElementToArrayBuffer(img)
     return ctx.pdfDoc.embedPng(imageData)
   }
 
-  // PNG/JPG 直接加载
-  const imageData = await loadImageAsArrayBuffer(img.src)
-  if (format === 'jpg') return ctx.pdfDoc.embedJpg(imageData)
-  return ctx.pdfDoc.embedPng(imageData)
+  try {
+    // PNG/JPG：加载字节后由 detectImageFormat 按魔数纠正格式
+    const imageData = await loadImageAsArrayBuffer(img.src)
+    const format = detectImageFormat(img.src, imageData)
+
+    try {
+      if (format === 'jpg') return await ctx.pdfDoc.embedJpg(imageData)
+      return await ctx.pdfDoc.embedPng(imageData)
+    } catch (embedError) {
+      // 其它格式或仍无法嵌入时，栅格化为 PNG 再嵌入
+      console.warn('embedImage by bytes failed, fallback rasterize:', embedError)
+      return ctx.pdfDoc.embedPng(await imageElementToArrayBuffer(img))
+    }
+  } catch (loadError) {
+    // fetch 失败等：尝试用已解码的 <img> 栅格化
+    console.warn('loadImageAsArrayBuffer failed, fallback rasterize:', loadError)
+    return ctx.pdfDoc.embedPng(await imageElementToArrayBuffer(img))
+  }
 }
 
 /** 嵌入 <svg> 元素为 PDFImage（转换为 PNG） */
