@@ -7,6 +7,16 @@
 
 ## [Unreleased]
 
+## [2.0.1] - 2026-08-20
+
+### Fixed
+
+- **修复文本对齐问题**：修复 `text-align: center` 和 `text-align: right` 时忽略 `padding` 的问题
+  - `calculateAlignedX` 函数现在会正确读取元素的 `padding` 值
+  - `text-align: right` 时文字会距离右边缘保持 `padding-right` 的距离，不再紧贴边缘
+  - `text-align: center` 时文字会在 content-box（排除左右 padding）内居中对齐
+  - 添加 `.bar` 样式的测试用例到 `App.vue`
+
 ## [2.0.0] - 2026-07-02
 
 ### Changed
