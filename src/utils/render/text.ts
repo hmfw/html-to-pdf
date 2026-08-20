@@ -255,16 +255,31 @@ function calculateAlignedX(
 
   if (textAlign === 'center') {
     const parentRect = parentElement.getBoundingClientRect()
+    const styles = window.getComputedStyle(parentElement)
+    const paddingLeft = parseFloat(styles.paddingLeft) || 0
+    const paddingRight = parseFloat(styles.paddingRight) || 0
+
     const parentWidth = pxToPt(parentRect.width)
     const textWidth = pxToPt(lineWidth)
     const parentX = pxToPt(parentRect.left - containerLeft)
-    x = parentX + (parentWidth - textWidth) / 2
+    const paddingLeftPt = pxToPt(paddingLeft)
+    const paddingRightPt = pxToPt(paddingRight)
+
+    // 在 content-box 内居中（减去左右 padding）
+    const contentWidth = parentWidth - paddingLeftPt - paddingRightPt
+    x = parentX + paddingLeftPt + (contentWidth - textWidth) / 2
   } else if (textAlign === 'right') {
     const parentRect = parentElement.getBoundingClientRect()
+    const styles = window.getComputedStyle(parentElement)
+    const paddingRight = parseFloat(styles.paddingRight) || 0
+
     const parentWidth = pxToPt(parentRect.width)
     const textWidth = pxToPt(lineWidth)
     const parentX = pxToPt(parentRect.left - containerLeft)
-    x = parentX + parentWidth - textWidth
+    const paddingRightPt = pxToPt(paddingRight)
+
+    // 右对齐时减去右侧 padding
+    x = parentX + parentWidth - textWidth - paddingRightPt
   }
 
   return x

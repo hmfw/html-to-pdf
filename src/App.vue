@@ -16,6 +16,8 @@
           <p>中英文混排：Hello 世界！数字 12345。</p>
           <p><strong>1234567890abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ</strong></p>
 
+          <div class="bar">90%</div>
+
           <h3>颜色</h3>
           <p style="color: #e91e63">hex 颜色文本（#e91e63）</p>
           <p style="color: rgb(33, 150, 243)">rgb 颜色文本</p>
@@ -564,6 +566,15 @@ h1 {
 
 .content-box li {
   margin: 8px 0;
+}
+
+.bar {
+  border-radius: 8px;
+  line-height: 32px;
+  text-align: right;
+  color: #fff;
+  padding: 0 12px;
+  background-color: #1890ff;
 }
 
 button {
