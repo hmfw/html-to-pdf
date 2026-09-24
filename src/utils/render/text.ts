@@ -7,17 +7,36 @@ import {
   concatTransformationMatrix,
 } from '@pdfme/pdf-lib'
 import { pxToPt, parseColor } from '../htmlParser.js'
+import { mathAutoTransform } from '../mathTransform.js'
 import type { RenderContext } from './context.js'
 import { findPageIndex } from './geometry.js'
 import { getStyle } from './layoutCache.js'
 
+/** CSS 通用字体族关键字：命中即回退到默认字体（default） */
+const GENERIC_FAMILIES = new Set([
+  'serif',
+  'sans-serif',
+  'monospace',
+  'cursive',
+  'fantasy',
+  'system-ui',
+  'ui-serif',
+  'ui-sans-serif',
+  'ui-monospace',
+  'ui-rounded',
+  'math',
+  'emoji',
+  'fangsong',
+  '-apple-system',
+  'blinkmacsystemfont',
+])
+
 /**
- * 根据字重选择合适的字体。
- * 中英文统一走子集化的思源黑体（子集已包含页面用到的拉丁字符），
- * 保证中英文混排时字形一致。
+ * 解析字重字符串/数字，判断是否按粗体渲染。
+ * 600 及以上（Semi-bold、Bold、Extra-bold、Black）视为粗体：库通常只有
+ * Regular / Bold 两个字重，600+ 视觉上更接近粗体。
  */
-export function selectFont(ctx: RenderContext, fontWeight: string | number): PDFFont {
-  // 解析字重（处理字符串和数字）
+function isBoldWeight(fontWeight: string | number): boolean {
   let weight = 400
   if (typeof fontWeight === 'string') {
     if (fontWeight === 'bold' || fontWeight === 'bolder') {
@@ -31,15 +50,133 @@ export function selectFont(ctx: RenderContext, fontWeight: string | number): PDF
   } else {
     weight = fontWeight
   }
+  return weight >= 600
+}
 
-  // 600 及以上（Semi-bold、Bold、Extra-bold、Black）使用 Bold 字体
-  // 理由：库只有 Regular / Bold 两个字重，600+ 视觉上更接近粗体
-  const isBold = weight >= 600
+/**
+ * 判断字符是否为 CJK（含汉字、假名、韩文、CJK 标点与全角字符）。
+ * 用于 text-align: justify 的两端对齐：CJK 文本靠「字间」拉伸，
+ * 拉丁文本靠「词间（空格）」拉伸，需按字符类型区分平摊。
+ */
+function isCjkChar(char: string): boolean {
+  const cp = char.codePointAt(0)
+  if (cp === undefined) return false
+  return (
+    (cp >= 0x3000 && cp <= 0x303f) || // CJK 标点
+    (cp >= 0x3040 && cp <= 0x30ff) || // 平假名 / 片假名
+    (cp >= 0x3400 && cp <= 0x4dbf) || // CJK 扩展 A
+    (cp >= 0x4e00 && cp <= 0x9fff) || // CJK 基本区
+    (cp >= 0xac00 && cp <= 0xd7af) || // 韩文音节
+    (cp >= 0xf900 && cp <= 0xfaff) || // CJK 兼容表意
+    (cp >= 0xff00 && cp <= 0xffef) || // 全角字符
+    (cp >= 0x20000 && cp <= 0x2ffff) //  CJK 扩展 B 及以上
+  )
+}
 
-  // 使用主字体
-  const mainFont = isBold ? (ctx.chineseFontBold ?? ctx.chineseFont) : ctx.chineseFont
+/**
+ * 判断某字符处是否为两端对齐的「拉伸机会」：空格（词间）或 CJK 字符（字间）。
+ * 拉丁词内字母之间不拉伸，故仅空格与 CJK 字符后追加额外前进量。
+ */
+function isJustifyOpportunity(char: string): boolean {
+  return char === ' ' || isCjkChar(char)
+}
 
-  return mainFont
+/**
+ * 把元素计算样式的 `font-family` 候选链解析为 fonts 注册表中的 key 列表（有序、去重）。
+ * - 具体字体名（去引号、忽略大小写）命中注册表则加入；
+ * - 通用族（serif / sans-serif / monospace 等）→ 默认字体 key；
+ * - 未注册的具体字体名忽略（靠 default + 逐字形回退兜底）。
+ * 末尾始终追加默认字体 key，保证兜底。
+ */
+function resolveFamilyKeys(ctx: RenderContext, cssFontFamily?: string): string[] {
+  const keys: string[] = []
+  const push = (k: string) => {
+    if (k && !keys.includes(k)) keys.push(k)
+  }
+
+  if (cssFontFamily) {
+    for (const raw of cssFontFamily.split(',')) {
+      const name = raw
+        .trim()
+        .replace(/^['"]|['"]$/g, '')
+        .trim()
+        .toLowerCase()
+      if (!name) continue
+      if (GENERIC_FAMILIES.has(name)) {
+        push(ctx.defaultFontKey)
+      } else if (ctx.fonts.has(name)) {
+        push(name)
+      }
+    }
+  }
+
+  push(ctx.defaultFontKey)
+  return keys
+}
+
+/**
+ * 为一段文本选择「主字体」：按 `font-family` 候选链选第一个命中的注册字体，
+ * 取其 Regular / Bold 字重。用于单行文本的基线/宽度估算与无需逐字形回退时的整段绘制。
+ */
+export function selectFont(
+  ctx: RenderContext,
+  fontFamily: string | undefined,
+  fontWeight: string | number,
+): PDFFont {
+  const isBold = isBoldWeight(fontWeight)
+  const keys = resolveFamilyKeys(ctx, fontFamily)
+
+  for (const key of keys) {
+    const fam = ctx.fonts.get(key)
+    if (!fam) continue
+    return isBold ? (fam.bold ?? fam.regular) : fam.regular
+  }
+
+  const def = ctx.fonts.get(ctx.defaultFontKey)!
+  return isBold ? (def.bold ?? def.regular) : def.regular
+}
+
+/**
+ * 为单个字符选择字体并解析实际渲染字符（应用简繁映射）。
+ *
+ * 先按 font-family 候选链（preferredKeys）查找覆盖该字符的字体，未命中再扫描
+ * 其它已注册字体做**逐字形回退**（镜像浏览器 per-glyph fallback）。全部缺失时
+ * 用默认字体绘制（显示为方块）。coverage 集含 OpenCC 转换后可渲染的原字符，
+ * 故用原字符判断覆盖，再经该字体的 charMap 得到实际字形字符。
+ */
+function resolveCharFont(
+  ctx: RenderContext,
+  preferredKeys: string[],
+  char: string,
+  isBold: boolean,
+): { font: PDFFont; mappedChar: string } {
+  const tryKey = (key: string): { font: PDFFont; mappedChar: string } | null => {
+    const fam = ctx.fonts.get(key)
+    if (!fam) return null
+    const useBold = isBold && !!fam.bold
+    const covered = useBold ? fam.coveredBold : fam.coveredRegular
+    if (covered && covered.has(char)) {
+      const charMap = useBold ? fam.charMapBold : fam.charMapRegular
+      return { font: useBold ? fam.bold! : fam.regular, mappedChar: charMap?.get(char) ?? char }
+    }
+    return null
+  }
+
+  for (const key of preferredKeys) {
+    const r = tryKey(key)
+    if (r) return r
+  }
+  // 逐字形回退：扫描 preferredKeys 之外的其它已注册字体
+  for (const key of ctx.fontKeys) {
+    if (preferredKeys.includes(key)) continue
+    const r = tryKey(key)
+    if (r) return r
+  }
+
+  // 无任一字体覆盖：用默认字体绘制（显示为方块）
+  const def = ctx.fonts.get(ctx.defaultFontKey)!
+  const useBold = isBold && !!def.bold
+  return { font: useBold ? def.bold! : def.regular, mappedChar: char }
 }
 
 /** 斜体倾斜角度（度）。项目未内嵌斜体字体，用 skew 变换模拟 oblique */
@@ -53,6 +190,12 @@ type BaseTextOptions = {
   color: ReturnType<typeof rgb>
   italic: boolean
   letterSpacing?: number
+  /**
+   * 两端对齐（text-align: justify）时每个「拉伸机会」处追加的额外前进量（pt）。
+   * 拉丁文本在空格后追加（词间），CJK 文本在每个 CJK 字符后追加（字间），
+   * 由 isJustifyOpportunity 判定；用于还原浏览器的两端对齐效果。
+   */
+  justifySpacing?: number
 }
 
 /** 底层绘制选项：需要已选好的字体对象 */
@@ -60,52 +203,68 @@ type DrawTextOptions = BaseTextOptions & {
   font: PDFFont
 }
 
-/** 上层渲染选项：需要字重和上下文来选择字体、处理字符映射 */
+/** 上层渲染选项：需要 font-family、字重和上下文来选择字体、处理字符映射与逐字形回退 */
 type RenderWithFallbackOptions = BaseTextOptions & {
+  fontFamily?: string
   fontWeight: string | number
   ctx: RenderContext
 }
 
 /**
- * 渲染文本，支持字符映射（简繁转换）。
- * 当字符有映射时（如繁体字库遇到简体字），使用映射后的繁体字符。
- * 将相邻字符合并为段，减少 drawText 调用次数。
+ * 逐字符渲染文本，支持 font-family 选字体、简繁映射与逐字形回退。
+ * 每个字符按 resolveCharFont 选定字体与实际字形字符，再把相邻使用相同字体的字符
+ * 合并为段，减少 drawText 调用次数。
  */
 function renderTextWithFallback(
   page: PDFPage,
   text: string,
   opts: RenderWithFallbackOptions,
 ): void {
-  const { x, y, size, fontWeight, color, italic, letterSpacing, ctx } = opts
+  const { x, y, size, fontFamily, fontWeight, color, italic, letterSpacing, justifySpacing, ctx } =
+    opts
   const chars = Array.from(text) // 处理代理对
+  const isBold = isBoldWeight(fontWeight)
+  const preferredKeys = resolveFamilyKeys(ctx, fontFamily)
 
-  // 根据字重选择简繁映射表
-  const weight =
-    typeof fontWeight === 'number'
-      ? fontWeight
-      : fontWeight === 'bold' || fontWeight === 'bolder'
-        ? 700
-        : 400
-  const isBold = weight >= 600
-  const charMap = isBold ? ctx.charMapBold : ctx.charMapRegular
-
-  // 如果没有字符映射，直接绘制整段文本
-  if (!charMap) {
-    const font = selectFont(ctx, fontWeight)
-    drawStyledText(page, text, { x, y, size, font, color, italic, letterSpacing })
-    return
-  }
-
-  // 有字符映射时，逐字符处理并合并相邻字符
-  let mappedText = ''
+  // 构建字符→字体的映射，合并相邻同字体字符为段
+  type CharSegment = { text: string; font: PDFFont }
+  const segments: CharSegment[] = []
+  let currentText = ''
+  let currentFont: PDFFont | null = null
 
   for (const char of chars) {
-    // 使用映射后的字符
-    mappedText += charMap.get(char) ?? char
+    const { font, mappedChar } = resolveCharFont(ctx, preferredKeys, char, isBold)
+
+    if (currentFont && currentFont !== font) {
+      segments.push({ text: currentText, font: currentFont })
+      currentText = mappedChar
+      currentFont = font
+    } else {
+      currentText += mappedChar
+      currentFont = font
+    }
   }
 
-  const font = selectFont(ctx, fontWeight)
-  drawStyledText(page, mappedText, { x, y, size, font, color, italic, letterSpacing })
+  // 输出最后一段
+  if (currentText && currentFont) {
+    segments.push({ text: currentText, font: currentFont })
+  }
+
+  // 绘制所有段
+  let currentX = x
+  for (const segment of segments) {
+    const width = drawStyledText(page, segment.text, {
+      x: currentX,
+      y,
+      size,
+      font: segment.font,
+      color,
+      italic,
+      letterSpacing,
+      justifySpacing,
+    })
+    currentX += width
+  }
 }
 
 /**
@@ -114,11 +273,17 @@ function renderTextWithFallback(
  *
  * @returns 返回绘制文本的总宽度（pt），包含 letter-spacing
  */
+/**
+ * 绘制文本，支持用 skew 变换模拟斜体，支持 letter-spacing 字符间距与两端对齐拉伸。
+ * skew 绕坐标原点进行，故先把变换原点平移到基线 (x, y) 再倾斜，避免文字水平错位。
+ *
+ * @returns 返回绘制文本的总宽度（pt），包含 letter-spacing 与 justify 拉伸量
+ */
 function drawStyledText(page: PDFPage, text: string, opts: DrawTextOptions): number {
-  const { x, y, italic, font, size, letterSpacing, ...rest } = opts
+  const { x, y, italic, font, size, letterSpacing, justifySpacing, ...rest } = opts
 
-  // 如果没有 letter-spacing 或为 0，使用原有的整段绘制逻辑
-  if (!letterSpacing || letterSpacing === 0) {
+  // 无字符间距 / 两端对齐拉伸时，走原有的整段绘制逻辑
+  if ((!letterSpacing || letterSpacing === 0) && (!justifySpacing || justifySpacing === 0)) {
     if (!italic) {
       page.drawText(text, { x, y, font, size, ...rest })
     } else {
@@ -135,7 +300,7 @@ function drawStyledText(page: PDFPage, text: string, opts: DrawTextOptions): num
     return font.widthOfTextAtSize(text, size)
   }
 
-  // 有 letter-spacing：逐字符绘制
+  // 有字符间距或两端对齐拉伸：逐字符绘制
   const chars = Array.from(text)
   let currentX = x
   const tan = italic ? Math.tan((ITALIC_SKEW_DEGREES * Math.PI) / 180) : 0
@@ -157,11 +322,13 @@ function drawStyledText(page: PDFPage, text: string, opts: DrawTextOptions): num
       page.pushOperators(popGraphicsState())
     }
 
-    // 字符宽度 + letter-spacing（最后一个字符后不加间距）
+    // 字符宽度 + letter-spacing（最后一个字符后不加间距）；
+    // 两端对齐时在每个「拉伸机会」（空格或 CJK 字符）后追加 justifySpacing
     currentX += charWidth
     if (i < chars.length - 1) {
-      currentX += letterSpacing
+      if (letterSpacing) currentX += letterSpacing
     }
+    if (justifySpacing && isJustifyOpportunity(char)) currentX += justifySpacing
   }
 
   return currentX - x
@@ -202,11 +369,13 @@ type MeasuredLine = { text: string; left: number; top: number; width: number; he
 /** 文本样式集合 */
 type TextStyles = {
   fontSize: number // pt
+  fontFamily: string // CSS font-family 候选链（用于选字体）
   fontWeight: string
   color: ReturnType<typeof parseColor>
   italic: boolean
   letterSpacing: number // pt
   textAlign: string
+  textTransform: string // 'math-auto' 时把单字符标识符转数学斜体
 }
 
 /**
@@ -214,6 +383,7 @@ type TextStyles = {
  */
 function collectTextStyles(styles: CSSStyleDeclaration): TextStyles {
   const fontSize = pxToPt(parseFloat(styles.fontSize))
+  const fontFamily = styles.fontFamily
   const fontWeight = styles.fontWeight
   const color = parseColor(styles.color)
   const italic = styles.fontStyle === 'italic' || styles.fontStyle.startsWith('oblique')
@@ -223,8 +393,9 @@ function collectTextStyles(styles: CSSStyleDeclaration): TextStyles {
     letterSpacingPx && letterSpacingPx !== 'normal' ? pxToPt(parseFloat(letterSpacingPx)) : 0
 
   const textAlign = styles.textAlign || 'left'
+  const textTransform = styles.textTransform || 'none'
 
-  return { fontSize, fontWeight, color, italic, letterSpacing, textAlign }
+  return { fontSize, fontFamily, fontWeight, color, italic, letterSpacing, textAlign, textTransform }
 }
 
 /**
@@ -286,11 +457,11 @@ function calculateAlignedX(
 }
 
 /**
- * 渲染单行文本（支持字符映射和装饰线）
+ * 渲染单行文本（支持字符映射和逐字形回退）
  */
 function renderSingleLine(
   page: PDFPage,
-  text: string,
+  rawText: string,
   x: number,
   y: number,
   textStyles: TextStyles,
@@ -298,20 +469,48 @@ function renderSingleLine(
   styles: CSSStyleDeclaration,
   lineWidth: number,
 ): void {
-  const { fontSize, fontWeight, color, italic, letterSpacing } = textStyles
-  const needsCharMapping = !!(ctx.charMapRegular || ctx.charMapBold)
-  const defaultFont = selectFont(ctx, fontWeight)
+  const { fontSize, fontFamily, fontWeight, color, italic, letterSpacing, textAlign, textTransform } =
+    textStyles
+  // 复刻 text-transform: math-auto（单字符标识符转数学斜体，如 X→𝑋）。
+  // 浏览器已按转换后字形排版，故只改「我们实际绘制的字符」，行位置仍用实测值。
+  const text = textTransform === 'math-auto' ? mathAutoTransform(rawText) : rawText
+  // 存在字符映射或注册了多个字体家族时，需逐字符选字体/映射（逐字形回退）
+  const needsFallback = ctx.hasCharMap || ctx.fonts.size > 1
+  const defaultFont = selectFont(ctx, fontFamily, fontWeight)
+
+  // 还原 text-align: justify 的两端对齐：浏览器把行内空白/字间拉伸以撑满整行，
+  // 而我们按字体自然字距绘制会偏窄，导致行内元素（如 <math>）前出现空白。
+  // 用「实测行宽 − 自然绘制宽度」的差值平摊到各「拉伸机会」上来补齐：
+  // 拉丁文本按空格（词间）、CJK 文本按字符（字间），由 isJustifyOpportunity 判定。
+  let justifySpacing = 0
+  if (textAlign === 'justify') {
+    const chars = Array.from(text)
+    // 拉伸机会数：除最后一个字符外，所有空格 / CJK 字符（行尾不再拉伸）
+    let opportunities = 0
+    for (let i = 0; i < chars.length - 1; i++) {
+      if (isJustifyOpportunity(chars[i])) opportunities++
+    }
+    if (opportunities > 0) {
+      const naturalWidthPt =
+        defaultFont.widthOfTextAtSize(text, fontSize) +
+        (letterSpacing || 0) * Math.max(0, chars.length - 1)
+      const extra = pxToPt(lineWidth) - naturalWidthPt
+      if (extra > 0) justifySpacing = extra / opportunities
+    }
+  }
 
   try {
-    if (needsCharMapping) {
+    if (needsFallback) {
       renderTextWithFallback(page, text, {
         x,
         y,
         size: fontSize,
+        fontFamily,
         fontWeight,
         color: rgb(color.r, color.g, color.b),
         italic,
         letterSpacing,
+        justifySpacing,
         ctx,
       })
     } else {
@@ -323,6 +522,7 @@ function renderSingleLine(
         color: rgb(color.r, color.g, color.b),
         italic,
         letterSpacing,
+        justifySpacing,
       })
     }
 
@@ -367,23 +567,20 @@ function measureVisualLines(textNode: Text): MeasuredLine[] {
     const t = content.slice(startOff, endOff)
     const trimmed = t.trim()
     if (trimmed) {
-      // 计算前导空格占用的宽度，调整 left 坐标
+      // 用去除首尾空白后的子区间测量 left / width：
+      // 排除首尾空格，wordSpacing 平摊才准确；两端对齐块的最后一行天然偏窄，
+      // 用实测 trimmed 宽度可自动令其 extra≤0（不再拉伸），与浏览器一致。
       const leadingSpaces = t.length - t.trimStart().length
-      let adjustedLeft = rect.left
-
-      // 如果有前导空格，用 Range 测量它们的宽度并调整起始坐标
-      if (leadingSpaces > 0) {
-        range.setStart(textNode, startOff)
-        range.setEnd(textNode, startOff + leadingSpaces)
-        const spacesRect = range.getBoundingClientRect()
-        adjustedLeft += spacesRect.width
-      }
+      const trailingSpaces = t.length - t.trimEnd().length
+      range.setStart(textNode, startOff + leadingSpaces)
+      range.setEnd(textNode, endOff - trailingSpaces)
+      const trimmedRect = range.getBoundingClientRect()
 
       lines.push({
         text: trimmed,
-        left: adjustedLeft,
+        left: trimmedRect.left,
         top: rect.top,
-        width: rect.width,
+        width: trimmedRect.width,
         height: rect.height,
       })
     }
@@ -432,9 +629,9 @@ function renderPreformattedText(
   styles: CSSStyleDeclaration,
 ): void {
   const lines = textNode.textContent!.split('\n')
-  const { fontSize, fontWeight } = textStyles
+  const { fontSize, fontFamily, fontWeight } = textStyles
   const lineHeight = resolveLineHeight(styles, fontSize)
-  const defaultFont = selectFont(ctx, fontWeight)
+  const defaultFont = selectFont(ctx, fontFamily, fontWeight)
   const firstBaseline = baselineFromTop(defaultFont, fontSize, lineHeight)
 
   lines.forEach((line, index) => {
@@ -461,8 +658,8 @@ function renderNormalText(
   styles: CSSStyleDeclaration,
 ): void {
   const lines = measureVisualLines(textNode)
-  const { fontSize, fontWeight, textAlign } = textStyles
-  const defaultFont = selectFont(ctx, fontWeight)
+  const { fontSize, fontFamily, fontWeight, textAlign } = textStyles
+  const defaultFont = selectFont(ctx, fontFamily, fontWeight)
 
   for (const line of lines) {
     const x = calculateAlignedX(

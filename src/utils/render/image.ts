@@ -111,7 +111,7 @@ export async function renderImage(
       x: box.x + s.padding,
       y: box.y + box.height / 2 - s.fontSize / 2,
       size: s.fontSize,
-      font: ctx.chineseFont,
+      font: ctx.fonts.get(ctx.defaultFontKey)!.regular,
       color: s.textColor,
     })
   }

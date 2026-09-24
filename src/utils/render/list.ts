@@ -49,7 +49,7 @@ export function drawListMarker(ctx: RenderContext, li: HTMLElement): void {
   const pageRect = pageIndex < ctx.pageRects.length ? ctx.pageRects[pageIndex] : ctx.containerRect
 
   const fontSize = pxToPt(parseFloat(styles.fontSize))
-  const font = selectFont(ctx, styles.fontWeight)
+  const font = selectFont(ctx, styles.fontFamily, styles.fontWeight)
   const color = parseColor(styles.color)
   const fill = rgb(color.r, color.g, color.b)
 

@@ -53,7 +53,7 @@ import { PDF_CONTAINER_ATTR, PDF_PAGE_ATTR } from '@hmfw/html-to-pdf'
 - `Source_Han_Sans_SC_Regular.woff`（必需）
 - `Source_Han_Sans_SC_Bold.woff`（必需）
 
-或通过 `options.fontPaths` 指定 CDN 或自定义路径。详见 [字体配置](../README.md#字体配置)。
+或通过 `options.fonts` 注册表指定 CDN 或自定义路径（按元素 CSS `font-family` 选字体）。详见 [字体配置](../README.md#字体配置)。
 
 ## React
 
@@ -183,8 +183,9 @@ Angular、Svelte、Solid 等同理：拿到模板中的 DOM 元素引用（`@Vie
   filename?: string                                   // 文件名（不含扩展名），默认 'document'
   pageSize?: 'A4' | 'A3' | 'Letter'                   // 或自定义 { width, height }（单位 pt），默认 'A4'
   orientation?: 'portrait' | 'landscape'              // 页面方向，默认 'portrait'
-  fontPaths?: { regular?, bold? }                     // 自定义字体路径（可选）
-  fontFallback?: boolean                              // 使用自定义字体时，检测到缺字才按需加载后备字体（思源黑体），默认 true
+  fonts?: Record<string, { regular, bold? }>          // 字体注册表：CSS 字体名 → 路径（推荐）；保留键 'default' 兜底，缺字形逐字回退
+  fontPaths?: { regular?, bold? }                     // @deprecated 请改用 fonts；等价于 fonts.default
+  basePath?: string                                   // 部署基础路径，默认 '/'
   fontSubset?: boolean                                // 是否子集化字体，默认 true
   fontLoadTimeout?: number                            // 字体加载超时（毫秒），默认 30000（30 秒）。网络较慢时建议 45000-60000
   canvasResolver?: (canvas) => string | ArrayBuffer | null // 自定义 canvas 图片来源（高清图表），null 走默认逻辑

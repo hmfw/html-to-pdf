@@ -45,16 +45,23 @@ pnpm add @hmfw/html-to-pdf
 
 > 💡 字体文件较大（每个约 13-14MB），不随 npm 包发布。由于字体子集化功能默认开启，PDF 最终只嵌入实际使用的字形（通常约 500KB）。
 
-或使用 CDN / 自定义路径：
+或使用 CDN / 自定义路径。通过 `fonts` 注册表按元素的 CSS `font-family` 选字体（含字重）：
 
 ```ts
 await htmlToPdf(element, {
-  fontPaths: {
-    regular: 'https://your-cdn.com/fonts/Source_Han_Sans_SC_Regular.woff',
-    bold: 'https://your-cdn.com/fonts/Source_Han_Sans_SC_Bold.woff',
+  fonts: {
+    // 保留键 default：未匹配任何注册字体或用到通用族（sans-serif 等）时使用
+    default: {
+      regular: 'https://your-cdn.com/fonts/Source_Han_Sans_SC_Regular.woff',
+      bold: 'https://your-cdn.com/fonts/Source_Han_Sans_SC_Bold.woff',
+    },
+    // 元素 font-family: 'Roboto' 命中此项（忽略大小写与引号）
+    Roboto: { regular: '/fonts/Roboto-Regular.woff', bold: '/fonts/Roboto-Bold.woff' },
   },
 })
 ```
+
+> `fontPaths: { regular, bold }` 仍可用（等价于 `fonts: { default: { regular, bold } }`），但已废弃，建议改用 `fonts`。
 
 详见 [自定义字体文档](docs/custom-fonts.md)。
 
@@ -114,9 +121,8 @@ const handleExport = async () => {
 
 ```ts
 await htmlToPdf(element, {
-  fontPaths: {
-    regular: '/fonts/SourceHanSansHK-Regular.otf',  // 香港繁体字库
-    bold: '/fonts/SourceHanSansHK-Bold.otf'
+  fonts: {
+    default: { regular: '/fonts/SourceHanSansHK-Regular.otf', bold: '/fonts/SourceHanSansHK-Bold.otf' },  // 香港繁体字库
   },
   converterOptions: { from: 'cn', to: 'hk' }  // 简体→香港繁体
 })
@@ -128,6 +134,28 @@ await htmlToPdf(element, {
 - `{ from: 'tw', to: 'cn' }`：繁体→简体
 
 详见 [字符转换文档](docs/converter.md) 和 [常见问题](docs/faq.md#pdf-中出现--字符)。
+
+**补充方案：逐字形回退**
+
+当缺失的是所选字体无法覆盖、也无法通过转换解决的字符（如数学符号 `ℝ`、`∈`、特殊符号）时，只需把补充字形的字体也注册进 `fonts`——所选字体缺某字形时会自动扫描注册表内其它字体补齐（镜像浏览器 per-glyph fallback）：
+
+```ts
+await htmlToPdf(element, {
+  fonts: {
+    // 纯符号兜底字体：不必被任何元素的 font-family 引用
+    'Noto Sans Math': { regular: '/fonts/NotoSansMath-Regular.otf' },
+    'STIX Two Math': { regular: '/fonts/STIXTwoMath-Regular.otf' },
+  },
+})
+```
+
+- 任何已注册字体都可为其它字体补齐缺失字形，不影响已存在的字符
+- 兜底字符按其所在字体自身字重渲染（多数符号字体只有一个字重），粗体上下文不会额外加粗
+- 每个字体按页面实际用到的字符子集化，注册多个字体不会显著增大产物
+- 与 `converterOptions` 可同时使用：转换优先，转换失败的字符再走逐字形回退
+- 若某字符在所有注册字体中都不存在，会显示为方块并输出一次汇总警告
+
+详见 [自定义字体文档](docs/custom-fonts.md#逐字形回退)。
 
 ## API
 
@@ -142,7 +170,11 @@ await htmlToPdf(element, {
   filename?: string                                   // 文件名（不含扩展名），默认 'document'
   pageSize?: 'A4' | 'A3' | 'Letter'                   // 或自定义 { width, height }（单位 pt），默认 'A4'
   orientation?: 'portrait' | 'landscape'              // 页面方向，默认 'portrait'
-  fontPaths?: {                                       // 自定义字体路径（可选）
+  fonts?: Record<string, {                            // 字体注册表：CSS 字体名 → 路径（推荐）
+    regular: string                                   // Regular 字体 URL（必需）
+    bold?: string                                     // Bold 字体 URL（可选）
+  }>                                                  // 保留键 'default' 为兜底；按元素 font-family 选字体，缺字形逐字回退
+  fontPaths?: {                                       // @deprecated 请改用 fonts；等价于 fonts.default
     regular?: string                                  // Regular 字体 URL
     bold?: string                                     // Bold 字体 URL
   }

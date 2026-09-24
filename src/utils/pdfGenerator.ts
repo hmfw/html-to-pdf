@@ -1,12 +1,17 @@
-import { PDFDocument, PDFFont } from '@pdfme/pdf-lib'
+import { PDFDocument } from '@pdfme/pdf-lib'
 import * as fontkit from 'fontkit'
-import type { PdfExportOptions, PdfGenerateResult } from '../types.js'
+import type { PdfExportOptions, PdfGenerateResult, FontFacePaths } from '../types.js'
 import { renderHTML, type RenderContext } from './pdfRenderer.js'
-import { createFontSubsetsForElement } from './fontSubset.js'
-import { loadFontWithFallback } from './fontLoader.js'
+import {
+  createFontRegistrySubsets,
+  type FamilyFontBuffers,
+  type FamilySubset,
+} from './fontSubset.js'
+import { loadFontWithFallback, fetchFontBuffer } from './fontLoader.js'
 import { createPerformanceMonitor, type PerformanceMonitor } from './performanceMonitor.js'
 import { collectBreakUnits, packIntoPages, hasManualPages } from './autoPaginate.js'
 import { createLayoutCache } from './render/layoutCache.js'
+import { DEFAULT_FONT_KEY, type EmbeddedFont } from './render/context.js'
 import { PDF_PAGE_ATTR } from '../constants.js'
 
 /** pt → px（与 pxToPt 的 0.75 比例互逆） */
@@ -188,63 +193,134 @@ function makeRect(containerRect: DOMRect, top: number, bottom: number): DOMRect 
     y: top,
   } as DOMRect
 }
-async function embedChineseFonts(
+/** 内部：一个待加载字体家族的规格（URL 未定则用内置思源黑体，仅默认家族允许） */
+interface FontLoadSpec {
+  key: string // 小写字体名
+  regularUrl?: string
+  boldUrl?: string
+  isDefault: boolean
+}
+
+/**
+ * 根据 options.fonts（+ 兼容旧的 options.fontPaths）构建待加载字体规格列表，
+ * 并保证存在默认家族（key = DEFAULT_FONT_KEY）。
+ */
+function buildFontSpecs(
+  fonts: Record<string, FontFacePaths> | undefined,
+  fontPaths: PdfExportOptions['fontPaths'],
+): FontLoadSpec[] {
+  const specs = new Map<string, FontLoadSpec>()
+
+  if (fonts) {
+    for (const [name, face] of Object.entries(fonts)) {
+      const key = name.trim().toLowerCase()
+      if (!key || !face?.regular) continue
+      specs.set(key, {
+        key,
+        regularUrl: face.regular,
+        boldUrl: face.bold,
+        isDefault: key === DEFAULT_FONT_KEY,
+      })
+    }
+  }
+
+  // 保证默认家族存在：优先用 fonts.default，其次兼容旧 fontPaths，最后内置思源黑体
+  if (!specs.has(DEFAULT_FONT_KEY)) {
+    specs.set(DEFAULT_FONT_KEY, {
+      key: DEFAULT_FONT_KEY,
+      regularUrl: fontPaths?.regular, // undefined → 内置思源黑体
+      boldUrl: fontPaths?.bold,
+      isDefault: true,
+    })
+  }
+
+  return [...specs.values()]
+}
+
+/**
+ * 加载并嵌入 fonts 注册表中的所有字体家族。
+ *
+ * - 默认家族（DEFAULT_FONT_KEY）：URL 未指定时回退到内置思源黑体（受 basePath 影响）。
+ * - 其它家族：Regular 必需（加载失败则跳过该家族并告警），Bold 可选。
+ * - 每个家族按页面实际用到的字符做子集化，并记录字形覆盖集供渲染时选字体/逐字形回退。
+ */
+async function embedFonts(
   pdfDoc: PDFDocument,
   element: HTMLElement,
-  customFontPaths: PdfExportOptions['fontPaths'],
+  fonts: Record<string, FontFacePaths> | undefined,
+  fontPaths: PdfExportOptions['fontPaths'],
   subset: boolean,
   monitor: PerformanceMonitor,
-  timeout: number = 30000,
-  basePath: string = '/',
+  timeout: number,
+  basePath: string,
   converterOptions: PdfExportOptions['converterOptions'],
-): Promise<{
-  regular: PDFFont
-  bold?: PDFFont
-  charMapRegular?: Map<string, string>
-  charMapBold?: Map<string, string>
-}> {
-  // 始终加载 Regular 和 Bold 两个字重。Regular 必需，Bold 失败时降级为无粗体。
-  const [regularBuf, boldBuf] = await Promise.all([
-    loadFontWithFallback('regular', customFontPaths?.regular, timeout, basePath),
-    loadFontWithFallback('bold', customFontPaths?.bold, timeout, basePath).catch((err) => {
-      console.warn('[html-to-pdf] Bold 字重加载失败，将仅使用 Regular:', err)
-      return undefined
+): Promise<{ fonts: Map<string, EmbeddedFont>; fontKeys: string[]; hasCharMap: boolean }> {
+  const specs = buildFontSpecs(fonts, fontPaths)
+
+  // 并行加载各家族字体 buffer
+  const families = await Promise.all(
+    specs.map(async (spec): Promise<FamilyFontBuffers> => {
+      if (spec.isDefault) {
+        // 默认家族：URL 未指定时回退内置思源黑体
+        const regular = await loadFontWithFallback('regular', spec.regularUrl, timeout, basePath)
+        const bold = await loadFontWithFallback('bold', spec.boldUrl, timeout, basePath).catch(
+          (err) => {
+            console.warn('[html-to-pdf] 默认字体 Bold 加载失败，将仅使用 Regular:', err)
+            return undefined
+          },
+        )
+        return { key: spec.key, regular, bold }
+      }
+
+      // 其它家族：Regular 必需，失败则跳过整个家族
+      const regular = spec.regularUrl
+        ? await fetchFontBuffer(spec.regularUrl, timeout).catch((err) => {
+            console.warn(`[html-to-pdf] 字体 "${spec.key}" 加载失败，将忽略该字体:`, err)
+            return undefined
+          })
+        : undefined
+      const bold = spec.boldUrl
+        ? await fetchFontBuffer(spec.boldUrl, timeout).catch((err) => {
+            console.warn(`[html-to-pdf] 字体 "${spec.key}" Bold 加载失败，将降级为 Regular:`, err)
+            return undefined
+          })
+        : undefined
+      return { key: spec.key, regular, bold }
     }),
-  ])
-  monitor.mark('加载主字体')
-
-  // 不子集化：直接嵌入完整字体
-  if (!subset) {
-    const regular = await pdfDoc.embedFont(regularBuf, { subset: false })
-    const bold = boldBuf ? await pdfDoc.embedFont(boldBuf, { subset: false }) : undefined
-    return { regular, bold }
-  }
-
-  // 子集化：扫描内容并创建字体子集
-  const subsets = await createFontSubsetsForElement(
-    element,
-    {
-      regular: regularBuf,
-      bold: boldBuf,
-    },
-    converterOptions,
   )
+  monitor.mark(`加载 ${families.length} 个字体家族`)
+
+  // 子集化（非子集化模式仅计算 coverage，保留完整字体）
+  const { subsets } = await createFontRegistrySubsets(element, families, converterOptions, subset)
   monitor.mark('创建字体子集')
 
-  if (!subsets.regular) {
-    throw new Error('子集字体嵌入失败：缺少 Regular 字重')
-  }
+  // 嵌入
+  const embedded = new Map<string, EmbeddedFont>()
+  let hasCharMap = false
+  const embedOpts = subset ? undefined : { subset: false }
 
-  const regular = await pdfDoc.embedFont(subsets.regular)
-  const bold = subsets.bold ? await pdfDoc.embedFont(subsets.bold) : undefined
+  for (const s of subsets as FamilySubset[]) {
+    if (!s.regular) continue
+    const regular = await pdfDoc.embedFont(s.regular, embedOpts)
+    const bold = s.bold ? await pdfDoc.embedFont(s.bold, embedOpts) : undefined
+    embedded.set(s.key, {
+      regular,
+      bold,
+      coveredRegular: s.coveredRegular,
+      coveredBold: s.coveredBold,
+      charMapRegular: s.charMapRegular,
+      charMapBold: s.charMapBold,
+    })
+    if ((s.charMapRegular && s.charMapRegular.size > 0) || (s.charMapBold && s.charMapBold.size > 0))
+      hasCharMap = true
+  }
   monitor.mark('嵌入子集字体')
 
-  return {
-    regular,
-    bold,
-    charMapRegular: subsets.charMapRegular,
-    charMapBold: subsets.charMapBold,
+  if (!embedded.has(DEFAULT_FONT_KEY)) {
+    throw new Error('字体嵌入失败：缺少默认字体（default）')
   }
+
+  return { fonts: embedded, fontKeys: [...embedded.keys()], hasCharMap }
 }
 
 /**
@@ -264,11 +340,12 @@ export async function htmlToPdf(
     const pdfDoc = await PDFDocument.create()
     pdfDoc.registerFontkit(fontkit as any)
 
-    // 中英文统一使用动态子集化的思源黑体（子集已含页面用到的拉丁字符）
+    // 按 fonts 注册表加载并嵌入各字体家族（默认家族回退内置思源黑体，子集含页面用到的字符）
     const subset = options.fontSubset !== false
-    const chineseFonts = await embedChineseFonts(
+    const embedded = await embedFonts(
       pdfDoc,
       element,
+      options.fonts,
       options.fontPaths,
       subset,
       monitor,
@@ -287,22 +364,14 @@ export async function htmlToPdf(
     const { pageRects, autoBands } = computePages(pdfDoc, element, containerRect, finalPageSize)
     monitor.mark(`创建 ${pdfDoc.getPageCount()} 个页面`)
 
-    // 调试：打印字符映射信息
-    if (chineseFonts.charMapRegular && chineseFonts.charMapRegular.size > 0) {
-      console.debug(`[html-to-pdf] Regular 字符映射表大小: ${chineseFonts.charMapRegular.size}`)
-    }
-    if (chineseFonts.charMapBold && chineseFonts.charMapBold.size > 0) {
-      console.debug(`[html-to-pdf] Bold 字符映射表大小: ${chineseFonts.charMapBold.size}`)
-    }
-
     const ctx: RenderContext = {
       pdfDoc,
       pages: pdfDoc.getPages(),
       pageRects,
-      chineseFont: chineseFonts.regular,
-      chineseFontBold: chineseFonts.bold,
-      charMapRegular: chineseFonts.charMapRegular,
-      charMapBold: chineseFonts.charMapBold,
+      fonts: embedded.fonts,
+      defaultFontKey: DEFAULT_FONT_KEY,
+      fontKeys: embedded.fontKeys,
+      hasCharMap: embedded.hasCharMap,
       containerRect,
       pageHeight: finalPageSize.height,
       pageWidth: finalPageSize.width,

@@ -4,6 +4,14 @@ export interface ConverterOptions {
   to: string
 }
 
+/** 单个字体家族的文件路径（含字重） */
+export interface FontFacePaths {
+  /** Regular 字重字体 URL（必需） */
+  regular: string
+  /** Bold 字重字体 URL（可选，缺失时粗体降级为 Regular） */
+  bold?: string
+}
+
 export interface PdfExportOptions {
   /** PDF 文件名（不含扩展名） */
   filename?: string
@@ -12,26 +20,49 @@ export interface PdfExportOptions {
   /** 页面方向 */
   orientation?: 'portrait' | 'landscape'
   /**
-   * 自定义字体路径（覆盖默认的思源黑体）。
+   * 字体注册表：CSS 字体名 → 字体文件路径（含字重）。
    *
-   * 不传时，库会按「`/fonts/<文件名>` → npmmirror → jsDelivr → unpkg」的顺序
-   * 自动降级加载随包发布的思源黑体，无需配置即可在国内外使用。
+   * 渲染时按元素**计算样式的 `font-family` 候选链**匹配本表选字体
+   * （匹配忽略大小写与引号），实现「所见即所得」的字体还原：
+   * - 元素 `font-family: 'Roboto', sans-serif` → 命中注册表里的 `Roboto`；
+   * - 通用族（`serif` / `sans-serif` / `monospace` 等）→ 使用 `default`。
    *
-   * 一旦显式提供某字重的路径，则只使用该路径，加载失败会直接报错
-   * （不会静默回退到默认字体）。
+   * **逐字形回退**：所选字体缺某个字形时（如正文字体没有数学符号 `ℝ`），
+   * 自动扫描注册表内**其它字体**补齐该字形，镜像浏览器自身的 per-glyph fallback。
+   * 因此把数学/符号字体也注册进来（哪怕没有元素显式使用它）即可充当兜底。
+   *
+   * **保留键 `'default'`**：未匹配任何注册字体、或用到通用族时使用；
+   * 不提供 `'default'` 时回退到内置思源黑体（可配合 `basePath`）。
+   *
+   * 注意：
+   * - 每个字体按页面实际用到的字符做子集化，注册多个字体不会显著增大产物。
+   * - 缺失字形按其所在字体自身字重渲染（多数符号字体只有一个字重），
+   *   粗体上下文中的兜底字符不会额外加粗——如需粗体请提供粗体文件。
+   * - 若某字符在所有注册字体中都不存在，会显示为方块并输出一次汇总警告。
    *
    * @example
    * ```typescript
    * {
-   *   regular: '/fonts/MyFont-Regular.otf',
-   *   bold: '/fonts/MyFont-Bold.otf'
+   *   fonts: {
+   *     default: { regular: '/fonts/SourceHanSans-R.woff', bold: '/fonts/SourceHanSans-B.woff' },
+   *     Roboto:  { regular: '/fonts/Roboto-R.woff', bold: '/fonts/Roboto-B.woff' },
+   *     // 纯符号兜底字体（不必被任何元素的 font-family 引用）
+   *     'Noto Sans Math': { regular: '/fonts/NotoSansMath-Regular.woff2' },
+   *   }
    * }
    * ```
    */
+  fonts?: Record<string, FontFacePaths>
+  /**
+   * @deprecated 请改用 `fonts`。等价于 `fonts: { default: { regular, bold } }`。
+   *
+   * 自定义默认字体路径（覆盖内置思源黑体）。当同时提供 `fonts.default` 时，
+   * 以 `fonts.default` 为准，本字段被忽略。
+   */
   fontPaths?: {
-    /** 中文 Regular 字体 URL（默认自动从本地/CDN 加载思源黑体 Regular） */
+    /** 中文 Regular 字体 URL（默认自动从 /fonts/ 加载思源黑体 Regular） */
     regular?: string
-    /** 中文 Bold 字体 URL（默认自动从本地/CDN 加载思源黑体 Bold） */
+    /** 中文 Bold 字体 URL（默认自动从 /fonts/ 加载思源黑体 Bold） */
     bold?: string
   }
   /**

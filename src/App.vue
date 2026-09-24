@@ -49,6 +49,339 @@
           </p>
         </div>
 
+        <div data-pdf-page>
+          <section id="S2.SS2.SSS0.Px1" class="ltx_paragraph">
+            <h5 class="ltx_title ltx_title_paragraph">Standard Hyper-Connections.</h5>
+
+            <div id="S2.SS2.SSS0.Px1.p1" class="ltx_para">
+              <p id="S2.SS2.SSS0.Px1.p1.1" class="ltx_p">
+                The standard HC expands the width of the residual stream by a factor of
+                <math
+                  id="S2.SS2.SSS0.Px1.p1.m1"
+                  class="ltx_Math"
+                  alttext="n_{\text{hc}}"
+                  display="inline"
+                  intent=":literal"
+                >
+                  <semantics>
+                    <msub><mi>n</mi><mtext>hc</mtext></msub>
+                    <annotation encoding="application/x-tex">n_{\text{hc}}</annotation>
+                  </semantics> </math
+                >. Specifically, the shape of the residual stream is expanded from
+                <math
+                  id="S2.SS2.SSS0.Px1.p1.m2"
+                  class="ltx_Math"
+                  alttext="\mathbb{R}^{d}"
+                  display="inline"
+                  intent=":literal"
+                >
+                  <semantics>
+                    <msup><mi>ℝ</mi><mi>d</mi></msup>
+                    <annotation encoding="application/x-tex">\mathbb{R}^{d}</annotation>
+                  </semantics>
+                </math>
+                to
+                <math
+                  id="S2.SS2.SSS0.Px1.p1.m3"
+                  class="ltx_Math"
+                  alttext="\mathbb{R}^{n_{\text{hc}}\times d}"
+                  display="inline"
+                  intent=":literal"
+                  ><semantics
+                    ><msup
+                      ><mi>ℝ</mi
+                      ><mrow
+                        ><msub><mi>n</mi><mtext>hc</mtext></msub
+                        ><mo lspace="0.222em" rspace="0.222em">×</mo><mi>d</mi></mrow
+                      ></msup
+                    ><annotation encoding="application/x-tex"
+                      >\mathbb{R}^{n_{\text{hc}}\times d}</annotation
+                    ></semantics
+                  ></math
+                >, where
+                <math
+                  id="S2.SS2.SSS0.Px1.p1.m4"
+                  class="ltx_Math"
+                  alttext="d"
+                  display="inline"
+                  intent=":literal"
+                  ><semantics
+                    ><mi>d</mi><annotation encoding="application/x-tex">d</annotation></semantics
+                  ></math
+                >
+                is the hidden size of the actual layer input. Let
+                <math
+                  id="S2.SS2.SSS0.Px1.p1.m5"
+                  class="ltx_Math"
+                  alttext="X_{l}=[\mathbf{x}_{l,1};\ldots;\mathbf{x}_{l,n_{\text{hc}}}]^{T}\in\mathbb{R}^{n_{\text{hc}}\times d}"
+                  display="inline"
+                  intent=":literal"
+                  ><semantics
+                    ><mrow
+                      ><msub><mi>X</mi><mi>l</mi></msub
+                      ><mo>=</mo
+                      ><msup
+                        ><mrow
+                          ><mo stretchy="false">[</mo
+                          ><mrow
+                            ><msub
+                              ><mi>𝐱</mi><mrow><mi>l</mi><mo>,</mo><mn>1</mn></mrow></msub
+                            ><mo>;</mo><mi mathvariant="normal">…</mi><mo>;</mo
+                            ><msub
+                              ><mi>𝐱</mi
+                              ><mrow
+                                ><mi>l</mi><mo>,</mo><msub><mi>n</mi><mtext>hc</mtext></msub></mrow
+                              ></msub
+                            ></mrow
+                          ><mo stretchy="false">]</mo></mrow
+                        ><mi>T</mi></msup
+                      ><mo>∈</mo
+                      ><msup
+                        ><mi>ℝ</mi
+                        ><mrow
+                          ><msub><mi>n</mi><mtext>hc</mtext></msub
+                          ><mo lspace="0.222em" rspace="0.222em">×</mo><mi>d</mi></mrow
+                        ></msup
+                      ></mrow
+                    ><annotation encoding="application/x-tex"
+                      >X_{l}=[\mathbf{x}_{l,1};\ldots;\mathbf{x}_{l,n_{\text{hc}}}]^{T}\in\mathbb{R}^{n_{\text{hc}}\times
+                      d}</annotation
+                    ></semantics
+                  ></math
+                >
+                be the residual state before the
+                <math
+                  id="S2.SS2.SSS0.Px1.p1.m6"
+                  class="ltx_Math"
+                  alttext="l"
+                  display="inline"
+                  intent=":literal"
+                  ><semantics
+                    ><mi>l</mi><annotation encoding="application/x-tex">l</annotation></semantics
+                  ></math
+                >-th layer. HC introduces three linear mappings: an input mapping
+                <math
+                  id="S2.SS2.SSS0.Px1.p1.m7"
+                  class="ltx_Math"
+                  alttext="A_{l}\in\mathbb{R}^{1\times n_{\text{hc}}}"
+                  display="inline"
+                  intent=":literal"
+                  ><semantics
+                    ><mrow
+                      ><msub><mi>A</mi><mi>l</mi></msub
+                      ><mo>∈</mo
+                      ><msup
+                        ><mi>ℝ</mi
+                        ><mrow
+                          ><mn>1</mn><mo lspace="0.222em" rspace="0.222em">×</mo
+                          ><msub><mi>n</mi><mtext>hc</mtext></msub></mrow
+                        ></msup
+                      ></mrow
+                    ><annotation encoding="application/x-tex"
+                      >A_{l}\in\mathbb{R}^{1\times n_{\text{hc}}}</annotation
+                    ></semantics
+                  ></math
+                >, a residual transformation
+                <math
+                  id="S2.SS2.SSS0.Px1.p1.m8"
+                  class="ltx_Math"
+                  alttext="B_{l}\in\mathbb{R}^{n_{\text{hc}}\times n_{\text{hc}}}"
+                  display="inline"
+                  intent=":literal"
+                >
+                  <semantics
+                    ><mrow
+                      ><msub><mi>B</mi><mi>l</mi></msub
+                      ><mo>∈</mo
+                      ><msup
+                        ><mi>ℝ</mi
+                        ><mrow
+                          ><msub><mi>n</mi><mtext>hc</mtext></msub
+                          ><mo lspace="0.222em" rspace="0.222em">×</mo
+                          ><msub><mi>n</mi><mtext>hc</mtext></msub></mrow
+                        ></msup
+                      ></mrow
+                    >
+                    <annotation encoding="application/x-tex"
+                      >B_{l}\in\mathbb{R}^{n_{\text{hc}}\times n_{\text{hc}}}</annotation
+                    >
+                  </semantics> </math
+                >, and an output mapping
+                <math
+                  id="S2.SS2.SSS0.Px1.p1.m9"
+                  class="ltx_Math"
+                  alttext="C_{l}\in\mathbb{R}^{n_{\text{hc}}\times 1}"
+                  display="inline"
+                  intent=":literal"
+                  ><semantics
+                    ><mrow
+                      ><msub><mi>C</mi><mi>l</mi></msub
+                      ><mo>∈</mo
+                      ><msup
+                        ><mi>ℝ</mi
+                        ><mrow
+                          ><msub><mi>n</mi><mtext>hc</mtext></msub
+                          ><mo lspace="0.222em" rspace="0.222em">×</mo><mn>1</mn></mrow
+                        ></msup
+                      ></mrow
+                    ><annotation encoding="application/x-tex"
+                      >C_{l}\in\mathbb{R}^{n_{\text{hc}}\times 1}</annotation
+                    ></semantics
+                  ></math
+                >. The update of the residual state is then formulated as:
+              </p>
+              <table id="S2.E1" class="ltx_equation ltx_eqn_table">
+                <tbody>
+                  <tr class="ltx_equation ltx_eqn_row ltx_align_baseline">
+                    <td class="ltx_eqn_cell ltx_eqn_center_padleft"></td>
+                    <td class="ltx_eqn_cell ltx_align_center">
+                      <math
+                        id="S2.E1.m1"
+                        class="ltx_Math"
+                        alttext="X_{l+1}=B_{l}X_{l}+C_{l}\mathcal{F}_{l}(A_{l}X_{l}),"
+                        display="block"
+                        intent=":literal"
+                        ><semantics
+                          ><mrow
+                            ><mrow
+                              ><msub
+                                ><mi>X</mi><mrow><mi>l</mi><mo>+</mo><mn>1</mn></mrow></msub
+                              ><mo>=</mo
+                              ><mrow
+                                ><mrow
+                                  ><msub><mi>B</mi><mi>l</mi></msub
+                                  ><mo lspace="0em" rspace="0em">&ZeroWidthSpace;</mo
+                                  ><msub><mi>X</mi><mi>l</mi></msub></mrow
+                                ><mo>+</mo
+                                ><mrow
+                                  ><msub><mi>C</mi><mi>l</mi></msub
+                                  ><mo lspace="0em" rspace="0em">&ZeroWidthSpace;</mo
+                                  ><msub><mi class="ltx_font_mathcaligraphic">ℱ</mi><mi>l</mi></msub
+                                  ><mo lspace="0em" rspace="0em">&ZeroWidthSpace;</mo
+                                  ><mrow
+                                    ><mo stretchy="false">(</mo
+                                    ><mrow
+                                      ><msub><mi>A</mi><mi>l</mi></msub
+                                      ><mo lspace="0em" rspace="0em">&ZeroWidthSpace;</mo
+                                      ><msub><mi>X</mi><mi>l</mi></msub></mrow
+                                    ><mo stretchy="false">)</mo></mrow
+                                  ></mrow
+                                ></mrow
+                              ></mrow
+                            ><mo>,</mo></mrow
+                          ><annotation encoding="application/x-tex"
+                            >X_{l+1}=B_{l}X_{l}+C_{l}\mathcal{F}_{l}(A_{l}X_{l}),</annotation
+                          ></semantics
+                        ></math
+                      >
+                    </td>
+                    <td class="ltx_eqn_cell ltx_eqn_center_padright"></td>
+                    <td
+                      rowspan="1"
+                      class="ltx_eqn_cell ltx_eqn_eqno ltx_align_middle ltx_align_right"
+                    >
+                      <span class="ltx_tag ltx_tag_equation ltx_align_right">(1)</span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+              <p id="S2.SS2.SSS0.Px1.p1.2" class="ltx_p">
+                where
+                <math
+                  id="S2.SS2.SSS0.Px1.p1.m10"
+                  class="ltx_Math"
+                  alttext="\mathcal{F}_{l}"
+                  display="inline"
+                  intent=":literal"
+                  ><semantics
+                    ><msub><mi class="ltx_font_mathcaligraphic">ℱ</mi><mi>l</mi></msub
+                    ><annotation encoding="application/x-tex"
+                      >\mathcal{F}_{l}</annotation
+                    ></semantics
+                  ></math
+                >
+                denotes the
+                <math
+                  id="S2.SS2.SSS0.Px1.p1.m11"
+                  class="ltx_Math"
+                  alttext="l"
+                  display="inline"
+                  intent=":literal"
+                  ><semantics
+                    ><mi>l</mi><annotation encoding="application/x-tex">l</annotation></semantics
+                  ></math
+                >-th layer (e.g., an MoE layer), whose input and output shapes are both
+                <math
+                  id="S2.SS2.SSS0.Px1.p1.m12"
+                  class="ltx_Math"
+                  alttext="\mathbb{R}^{d}"
+                  display="inline"
+                  intent=":literal"
+                  ><semantics
+                    ><msup><mi>ℝ</mi><mi>d</mi></msup
+                    ><annotation encoding="application/x-tex">\mathbb{R}^{d}</annotation></semantics
+                  ></math
+                >. Note that the actual layer input
+                <math
+                  id="S2.SS2.SSS0.Px1.p1.m13"
+                  class="ltx_Math"
+                  alttext="A_{l}X_{l}\in\mathbb{R}^{d}"
+                  display="inline"
+                  intent=":literal"
+                  ><semantics
+                    ><mrow
+                      ><mrow
+                        ><msub><mi>A</mi><mi>l</mi></msub
+                        ><mo lspace="0em" rspace="0em">&ZeroWidthSpace;</mo
+                        ><msub><mi>X</mi><mi>l</mi></msub></mrow
+                      ><mo>∈</mo><msup><mi>ℝ</mi><mi>d</mi></msup></mrow
+                    ><annotation encoding="application/x-tex"
+                      >A_{l}X_{l}\in\mathbb{R}^{d}</annotation
+                    ></semantics
+                  ></math
+                >
+                is also
+                <math
+                  id="S2.SS2.SSS0.Px1.p1.m14"
+                  class="ltx_Math"
+                  alttext="d"
+                  display="inline"
+                  intent=":literal"
+                  ><semantics
+                    ><mi>d</mi><annotation encoding="application/x-tex">d</annotation></semantics
+                  ></math
+                >-dimensional, so the expanded residual width does not influence the design of the
+                inner layers. HC decouples the residual width from the actual hidden size, offering
+                a complementary scaling axis with minimal computational overhead, as
+                <math
+                  id="S2.SS2.SSS0.Px1.p1.m15"
+                  class="ltx_Math"
+                  alttext="n_{\text{hc}}"
+                  display="inline"
+                  intent=":literal"
+                  ><semantics
+                    ><msub><mi>n</mi><mtext>hc</mtext></msub
+                    ><annotation encoding="application/x-tex">n_{\text{hc}}</annotation></semantics
+                  ></math
+                >
+                is typically much smaller than the hidden size
+                <math
+                  id="S2.SS2.SSS0.Px1.p1.m16"
+                  class="ltx_Math"
+                  alttext="d"
+                  display="inline"
+                  intent=":literal"
+                  ><semantics
+                    ><mi>d</mi><annotation encoding="application/x-tex">d</annotation></semantics
+                  ></math
+                >. However, even though HC has demonstrated potential in improving model
+                performance, we find that the training will frequently exhibit numerical instability
+                when stacking multiple layers, which hinders the scaling of HC.
+              </p>
+            </div>
+          </section>
+        </div>
+
         <!-- 第 2 页：背景、边框、列表、引用 -->
         <div data-pdf-page class="pdf-page">
           <h2>第 2 页 · 盒子样式与结构</h2>
@@ -237,6 +570,7 @@
             </tbody>
           </table>
         </div>
+
         <div data-pdf-page class="pdf-page">
           <h2>第 6 页 · 合并单元格（colspan / rowspan）</h2>
           <p class="hint">提示：合并单元格建议显式设置背景色，避免下层行条纹透出。</p>
@@ -310,6 +644,7 @@
             焉、也、者、之、其、何、若、乃、而、且、或、雖、雖然、然則、是故
           </p>
         </div>
+
         <div data-pdf-page class="pdf-page page-7">
           <h3>诗词常见字</h3>
           <p>
@@ -456,10 +791,15 @@ async function handleExport() {
   try {
     const result = await htmlToPdf(pdfContainer.value, {
       filename: 'comprehensive-demo',
-      // fontPaths: {
-      //   regular: '/public/fonts/AlibabaSansHK-55.woff',
-      //   bold: '/public/fonts/AlibabaSansHK-75.woff',
-      // },
+      // 字体注册表：按元素 CSS font-family 选字体（含字重），实现「所见即所得」。
+      // 保留键 default 未指定时回退内置思源黑体。未被任何元素引用的字体（如数学符号
+      // 字体）也会作为逐字形回退，补齐所选字体缺失的字形（如 ℝ ∈ × 等）。
+      fonts: {
+        // 元素 font-family: 'Rival Sans' 命中此项（忽略大小写与引号）
+        // 纯符号兜底字体：不必被任何元素的 font-family 引用
+        'latin-modern-math': { regular: '/public/fonts/latin-modern-math.otf' },
+        // default: { regular: '/public/fonts/AlibabaSansHK-55.woff', bold: '/public/fonts/AlibabaSansHK-75.woff' },
+      },
       // converterOptions: {
       //   from: 'cn',
       //   to: 'hk',
@@ -585,7 +925,6 @@ button {
   border-radius: 4px;
   cursor: pointer;
   font-size: 14px;
-  font-family: 'Source Han Sans SC', sans-serif;
 }
 
 button:hover:not(:disabled) {
@@ -709,7 +1048,6 @@ pre {
 }
 
 code {
-  font-family: 'Courier New', monospace;
   font-size: 13px;
   color: #333;
 }
@@ -784,5 +1122,24 @@ rt {
   min-width: 2em;
   text-align: center;
   white-space: nowrap;
+}
+.ltx_title_paragraph {
+  margin-inline-end: 1rem;
+  margin-bottom: 0.5rem;
+  font-size: 1rem;
+  font-weight: 700;
+}
+.ltx_para,
+.ltx_abstract .ltx_p,
+.ltx_acknowledgements {
+  text-align: justify;
+  hyphens: auto;
+  line-height: 1.5rem;
+}
+.ltx_eqn_table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 0.65rem auto;
+  display: table;
 }
 </style>

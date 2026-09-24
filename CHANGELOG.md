@@ -7,6 +7,28 @@
 
 ## [Unreleased]
 
+## [3.0.0] - 2026-09-24
+
+### Changed
+
+- **Breaking**: 用统一的 `fonts` 注册表替代 `fontPaths` + `fallbackFonts`
+  - 新增 `options.fonts?: Record<string, { regular: string; bold?: string }>`，key 为 CSS 字体名
+  - 渲染时读取每个元素计算样式的 `font-family` 候选链，匹配注册表选字体（忽略大小写与引号）
+  - 保留键 `'default'`：未匹配任何注册字体、或用到通用族（`serif`/`sans-serif` 等）时使用；不提供则回退内置思源黑体
+  - **移除 `fallbackFonts` 选项**：其能力被注册表的「逐字形回退」吸收——所选字体缺某字形时，自动扫描注册表内其它字体补齐（镜像浏览器 per-glyph fallback）
+  - `fontPaths` 降级为 `@deprecated` 兼容别名，等价于 `fonts.default`；同时提供 `fonts.default` 时以后者为准
+  - 用户影响：使用 `fallbackFonts` 的需改为把兜底字体登记进 `fonts`；`fontPaths` 仍可用但建议迁移到 `fonts`
+
+### Added
+
+- **按 `font-family` 选字体**：在 `fonts` 注册表登记多个字体后，忠实还原页面各元素的字体
+- **`text-align: justify` 两端对齐**：按内容平摊拉伸——拉丁文本按词间（空格）、CJK 文本按字间——复刻浏览器排版，修复行内元素（如 `<math>`）左侧出现空白的问题
+- **`text-transform: math-auto` 支持**：复刻 MathML `<mi>` 默认行为，把单字符标识符渲染为数学斜体（如 `X`→`𝑋`、`α`→`𝛼`），转换后的码点会一并纳入字体子集
+
+### Fixed
+
+- **修复字体子集命名**：opentype.js 顶层 `names.*` 只读单一平台，部分字体（名字仅写在 macintosh 记录里，如 Latin Modern Math）会误落到硬编码兜底名 `Source Han Sans SC`；现跨平台回退读取家族名/字重名
+
 ## [2.0.1] - 2026-08-20
 
 ### Fixed

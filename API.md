@@ -38,7 +38,24 @@ interface PdfExportOptions {
   /** 页面方向，默认 'portrait' */
   orientation?: 'portrait' | 'landscape'
   
-  /** 自定义字体路径（可选，默认尝试 /fonts/ 路径） */
+  /**
+   * 字体注册表：CSS 字体名 → 字体文件路径（含字重）。
+   *
+   * 渲染时按元素计算样式的 font-family 候选链匹配本表选字体（忽略大小写与引号），
+   * 实现「所见即所得」的字体还原；通用族（serif/sans-serif/monospace 等）用 default。
+   *
+   * 逐字形回退：所选字体缺某字形时，自动扫描注册表内其它字体补齐（镜像浏览器
+   * per-glyph fallback）。把数学/符号字体也注册进来即可充当兜底（哪怕无元素引用它）。
+   *
+   * 保留键 'default'：未匹配任何注册字体、或用到通用族时使用；不提供 'default'
+   * 时回退到内置思源黑体（可配合 basePath）。
+   */
+  fonts?: Record<string, { regular: string; bold?: string }>
+
+  /**
+   * @deprecated 请改用 fonts。等价于 fonts: { default: { regular, bold } }。
+   * 自定义默认字体路径（可选，默认尝试 /fonts/ 路径）。同时提供 fonts.default 时被忽略。
+   */
   fontPaths?: {
     regular?: string  // 默认 '/fonts/Source_Han_Sans_SC_Regular.woff'
     bold?: string     // 默认 '/fonts/Source_Han_Sans_SC_Bold.woff'
@@ -49,22 +66,10 @@ interface PdfExportOptions {
    *
    * 应用部署在子路径（非域名根目录）时，传入应用 base（如 Vite 的
    * import.meta.env.BASE_URL），默认字体路径 /fonts/... 会自动带上该前缀，
-   * 避免被解析到域名根而 404。同时作用于默认主字体与按需加载的后备字体；
-   * 显式提供的 fontPaths 是完整 URL，不受影响。
+   * 避免被解析到域名根而 404。作用于未指定路径时加载的内置默认字体；
+   * 显式提供的 fonts / fontPaths 路径是完整 URL，不受影响。
    */
   basePath?: string
-  
-  /**
-   * 使用自定义字体时，是否在检测到缺字时加载思源黑体作为后备字体（默认 true）
-   * 
-   * 采用按需加载：只有扫描内容发现主字体确实缺字时才下载后备字体，
-   * 自定义字体完整覆盖所用字符时不产生额外字体请求。
-   * - true：检测到缺字时自动加载思源黑体补充（需要托管思源黑体文件）
-   * - false：从不加载后备字体，缺失的字符会显示为方块
-   * 
-   * 仅在提供了 fontPaths 时生效。
-   */
-  fontFallback?: boolean
   
   /** 是否子集化字体，默认 true。false 时嵌入完整字体（文件显著增大） */
   fontSubset?: boolean

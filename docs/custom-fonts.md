@@ -9,20 +9,48 @@
 /fonts/Source_Han_Sans_SC_Bold.woff
 ```
 
-**你需要将字体文件放到应用的 `public/fonts/` 目录**，或通过 `fontPaths` 选项指定其他路径。
+**你需要将字体文件放到应用的 `public/fonts/` 目录**，或通过 `fonts` 注册表（推荐）/ `fontPaths`（已废弃）指定其他路径。
 
 以下场景需要自定义字体路径：
 - 使用其他中文字体（如微软雅黑、阿里巴巴普惠体）
 - 字体托管在 CDN 或自定义路径
 - 应用部署在子目录，本地路径不是 `/fonts/`
+- 按元素 CSS `font-family` 还原不同字体（见「按 font-family 选字体」）
 
-> 提供 `fontPaths` 后，只使用指定路径，加载失败会直接报错。
+> 提供路径后，只使用指定路径，加载失败会直接报错（默认字体家族除外，其加载失败会回退内置思源黑体）。
 
 ---
 
-## 解决方案
+## 推荐方案：fonts 注册表
 
-使用 `fontPaths` 选项自定义字体路径。
+`fonts` 是一张「CSS 字体名 → 字体文件路径（含字重）」的注册表。渲染时按元素计算样式的
+`font-family` 候选链匹配本表选字体（忽略大小写与引号），实现「所见即所得」：
+
+```typescript
+import { htmlToPdf } from '@hmfw/html-to-pdf'
+
+await htmlToPdf(element, {
+  fonts: {
+    // 保留键 default：未匹配任何注册字体、或用到通用族（sans-serif 等）时使用。
+    // 不提供 default 时回退到内置思源黑体（可配合 basePath）。
+    default: { regular: '/fonts/Source_Han_Sans_SC_Regular.woff', bold: '/fonts/Source_Han_Sans_SC_Bold.woff' },
+    // 元素 font-family: 'Roboto' 命中此项
+    Roboto:  { regular: '/fonts/Roboto-Regular.woff', bold: '/fonts/Roboto-Bold.woff' },
+  },
+})
+```
+
+- 每个家族 `regular` 必需、`bold` 可选（缺失时粗体降级为 Regular）。
+- 每个字体按页面实际用到的字符做子集化，注册多个字体不会显著增大产物。
+- 任何注册字体都可为其它字体补齐缺失字形（见「逐字形回退」）。
+
+> `fontPaths: { regular, bold }` 仍可用，等价于 `fonts: { default: { regular, bold } }`，但**已废弃**；同时提供 `fonts.default` 时以 `fonts.default` 为准。下文示例中的 `fontPaths` 均可直接替换为 `fonts.default`。
+
+---
+
+## 解决方案（fontPaths，已废弃）
+
+以下 `fontPaths` 用法仍然有效，等价于 `fonts: { default: {...} }`。
 
 ### 基本用法
 
@@ -64,7 +92,7 @@ await htmlToPdf(element, {
 
 应用部署在子路径（非域名根目录，如 `https://example.com/app/`）时，内置思源黑体的默认路径 `/fonts/...` 会被解析到**域名根**而非应用根，导致字体 404。
 
-推荐用 `basePath` 选项一处解决，它会自动为默认主字体和按需加载的后备字体都带上前缀：
+推荐用 `basePath` 选项一处解决，它会自动为默认主字体带上前缀：
 
 ```typescript
 // 无需自定义字体，仅传入部署 base 即可
@@ -308,6 +336,62 @@ await htmlToPdf(element, {
 
 ---
 
+## 按 font-family 选字体
+
+在 `fonts` 注册表里登记多个字体后，渲染时会读取每个元素计算样式的 `font-family`，
+按候选链顺序匹配注册表选字体（忽略大小写与引号），从而忠实还原页面排版：
+
+```typescript
+await htmlToPdf(element, {
+  fonts: {
+    default:  { regular: '/fonts/SourceHanSans-Regular.woff', bold: '/fonts/SourceHanSans-Bold.woff' },
+    Roboto:   { regular: '/fonts/Roboto-Regular.woff', bold: '/fonts/Roboto-Bold.woff' },
+    Merriweather: { regular: '/fonts/Merriweather-Regular.ttf' },
+  },
+})
+```
+
+对应页面：
+
+```html
+<p style="font-family: Roboto, sans-serif">用 Roboto 渲染</p>
+<p style="font-family: Merriweather, serif">用 Merriweather 渲染</p>
+<p style="font-family: sans-serif">通用族 → 使用 default</p>
+<p>未指定 → 使用 default</p>
+```
+
+- 具体字体名命中注册表即用；未注册的具体字体名忽略（靠 default + 逐字形回退兜底）。
+- 通用族（`serif` / `sans-serif` / `monospace` / `system-ui` 等）统一用 `default`。
+- 字重仍按元素 `font-weight` 在所选家族的 Regular / Bold 间取（600+ 视为粗体）。
+
+---
+
+## 逐字形回退
+
+所选字体可能缺少某些字符，最常见的是数学符号（`ℝ`、`∈`、`×`）、生僻符号等。这类字符既无法通过 `converterOptions` 简繁转换解决，所选字库里也没有字形，默认会渲染成方块。
+
+只需把补充字形的字体也注册进 `fonts`——所选字体缺某字形时，会自动扫描注册表内**其它字体**补齐（镜像浏览器的 per-glyph fallback）：
+
+```typescript
+await htmlToPdf(element, {
+  fonts: {
+    // 纯符号兜底字体：不必被任何元素的 font-family 引用
+    'Noto Sans Math': { regular: '/fonts/NotoSansMath-Regular.otf' },
+    'STIX Two Math':  { regular: '/fonts/STIXTwoMath-Regular.otf' },
+  },
+})
+```
+
+工作方式：
+
+- 仅对**所选字体缺失的字符**生效，已有字符仍用所选字体渲染。
+- 按注册表顺序查找，取第一个包含该字符的字体；子集化只保留实际用到的字形，不会因兜底字体体积大而拖累产物。
+- 兜底字符按其所在字体**自身的字重**渲染。符号字体通常只有一个字重，因此即使处于粗体上下文也不会额外加粗；如需粗体兜底，请直接提供粗体的字体文件。
+- 可与 `converterOptions` 同时使用：转换优先，转换后仍缺失的字符再走逐字形回退。
+- 若某字符在**所有**注册字体中都不存在，仍显示为方块，并在控制台输出一次汇总警告。
+
+---
+
 ## 高级用法（未来扩展）
 
 ### 支持更多字重
@@ -400,14 +484,14 @@ await htmlToPdf(element, {
 
 ## 总结
 
-✅ 使用 `fontPaths` 选项自定义字体路径  
+✅ 使用 `fonts` 注册表自定义字体（`fontPaths` 已废弃，仍兼容）  
+✅ 按元素 CSS `font-family` 选字体，逐字形回退补齐缺失字形  
 ✅ 支持本地路径、CDN、子目录部署  
 ✅ 自动字体子集化，无需手动处理  
-✅ 只覆盖需要改的路径，其余使用默认值  
 ⚠️ 注意字体授权和 CORS 问题  
 ⚠️ 支持 `.otf`、`.ttf`、`.woff` 格式
 
 **API 设计原则**：
-- 简洁：只需传递路径字符串
-- 灵活：支持部分覆盖
+- 所见即所得：按 `font-family` 还原页面字体
+- 灵活：任意注册字体互为逐字形回退
 - 兼容：不传则使用默认思源黑体

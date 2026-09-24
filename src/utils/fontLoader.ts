@@ -53,6 +53,14 @@ async function fetchArrayBuffer(url: string, timeout: number): Promise<ArrayBuff
 }
 
 /**
+ * 从任意 URL 加载字体文件（用于 fonts 注册表中的非默认字体）。
+ * 与 loadFontWithFallback 不同：不做默认路径拼接、失败直接抛错。
+ */
+export function fetchFontBuffer(url: string, timeout: number = 30000): Promise<ArrayBuffer> {
+  return fetchArrayBuffer(url, timeout)
+}
+
+/**
  * 校验返回内容确实是字体文件，而非 SPA 的 index.html 404 兜底页。
  * 思源黑体为 OpenType/CFF（`OTTO`）；同时容忍 TrueType（`\x00\x01\x00\x00`）、
  * WOFF（`wOFF`）、WOFF2（`wOF2`），避免误伤自定义字体。
